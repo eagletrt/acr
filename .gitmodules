@@ -1,0 +1,3 @@
+[submodule "external/gpslib"]
+	path = external/gpslib
+	url = git@github.com:eagletrt/gpslib.git
