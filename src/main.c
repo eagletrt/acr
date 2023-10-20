@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "defines.h"
+#include "led.h"
 
 int main(void) {
 
@@ -25,15 +26,22 @@ int main(void) {
     gpioSetPullUpDown(P_BTN_BL, PI_PUD_UP);
     gpioSetPullUpDown(P_BTN_MODE, PI_PUD_UP);
 
+    led_t *led_gn = led_new(P_LED_GN);
+    led_t *led_rd = led_new(P_LED_RD);
+
+    led_set_state(led_gn, 100, 100);
+    led_set_state(led_rd, 1000, 500);
+
     while(1) {
-	    printf("%d(yl) %d(or) %d(bl) %d(mode)\n",
+	    led_run();
+	    usleep(1e2);
+	    /*printf("%d(yl) %d(or) %d(bl) %d(mode)\n",
 			    gpioRead(P_BTN_YL),
 			    gpioRead(P_BTN_OR),
 			    gpioRead(P_BTN_BL),
 			    gpioRead(P_BTN_MODE)
-		  );
-	   gpioWrite(P_LED_GN, 1 - gpioRead(P_BTN_YL));
-	   usleep(1e5);
+		  );*/
+
     }
 
     return EXIT_SUCCESS;

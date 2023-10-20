@@ -12,5 +12,11 @@ include_directories(
     ${CMAKE_CURRENT_LIST_DIR}/inc
 )
 
+add_library(acr
+	STATIC
+	src/led.c
+)
+target_link_libraries(acr PUBLIC ${pigpio_LIBRARY})
+
 add_executable(main src/main.c)
-target_link_libraries(main ${pigpio_LIBRARY})
+target_link_libraries(main acr)
