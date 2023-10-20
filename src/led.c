@@ -1,5 +1,6 @@
 #include "led.h"
 #include "gpio.h"
+#include "utils.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,13 +19,6 @@ typedef struct _led_t{
 
 static int last_led = -1;
 led_t leds[LED_MAX_LEDS];
-
-static uint32_t get_t() {
-	struct timespec t;
-	clock_gettime(CLOCK_MONOTONIC_RAW, &t);
-	uint32_t us = (t.tv_sec * 1e6) + (t.tv_nsec * 1e-3);
-	return us;
-}
 
 led_t *led_new(int pin) {
 	assert(last_led + 1 < LED_MAX_LEDS);
@@ -52,6 +46,7 @@ void led_blink_once(led_t *led, int on_ms) {
 	led->one_shot = 1;
 	led->on_us = on_ms * 1e3;
 	led->off_us = 0;
+	led->t = get_t();
 }
 
 void led_run() {

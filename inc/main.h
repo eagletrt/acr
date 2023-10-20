@@ -33,7 +33,16 @@ typedef struct cone_session_t {
     char session_path[1024];
 }cone_session_t;
 
-void pin_setup();
+typedef struct user_data_t {
+    char *basepath;
+
+    cone_t *cone;
+    full_session_t *session;
+    cone_session_t *cone_session;
+}user_data_t;
+
+void pin_setup(user_data_t *user_data);
+void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data);
 void sig_handler(int signum);
 
 int dir_exist_or_create(char *path);

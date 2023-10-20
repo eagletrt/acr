@@ -1,6 +1,8 @@
 #ifndef GPIO_H
 #define GPIO_H
 
+#include <stdint.h>
+
 #ifndef ACR_NO_PIGPIO
 #include <pigpio.h>
 #else
@@ -19,7 +21,8 @@ int gpioWrite(int, int);
 int gpioSetMode(int, int);
 int gpioSetPullUpDown(int, int);
 
-
 #endif // ACR_NO_PIGPIO
+
+int gpioSkipForDebounce(int pin, int state);
 
 #endif // GPIO_H

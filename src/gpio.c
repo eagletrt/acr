@@ -1,7 +1,8 @@
 #include "gpio.h"
+#include "defines.h"
+#include "utils.h"
 
 #ifdef ACR_NO_PIGPIO
-#include "defines.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -84,3 +85,20 @@ int gpioSetPullUpDown(int, int){
 }
 
 #endif // ACR_NO_PIGPIO
+
+typedef struct deb_t {
+    int state;
+    uint64_t t;
+}deb_t;
+static deb_t debounce_pins[MAX_PINS];
+
+int gpioSkipForDebounce(int pin, int state) {
+    int ret = 0;
+    debounce_pins[pin].state = state;
+
+    if(get_t() - debounce_pins[pin].t < DEBOUNCE_US) {
+        ret = 1;
+    }
+    debounce_pins[pin].t = get_t();
+    return ret;
+}

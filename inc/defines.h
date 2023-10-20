@@ -11,5 +11,10 @@
 
 #define P_BTN_MODE (27)
 
+#define MAX_PINS 52
+
+#define DEBOUNCE_US (10000)
+
+#define CONE_REPRESS_US (1000000)
 
 #endif // DEFINE_H

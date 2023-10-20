@@ -23,6 +23,7 @@ add_library(acr
 	STATIC
 	${CMAKE_CURRENT_LIST_DIR}/src/led.c
 	${CMAKE_CURRENT_LIST_DIR}/src/gpio.c
+	${CMAKE_CURRENT_LIST_DIR}/src/utils.c
 )
 target_link_libraries(acr PUBLIC ${pigpio_LIBRARY})
 

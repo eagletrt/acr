@@ -1,5 +1,4 @@
 #include "main.h"
-#include "gpio.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,15 +9,25 @@
 #include <string.h>
 
 #include "defines.h"
+#include "gpio.h"
+#include "utils.h"
 #include "led.h"
 
-full_session_t session;
-cone_session_t cone_session;
+led_t *led_gn;
+led_t *led_rd;
 
 int main(void) {
     printf("ACR: Advanced Cone Registration\n");
+    user_data_t user_data;
 
-    char *basepath = getenv("HOME");
+    cone_t cone;
+    full_session_t session;
+    cone_session_t cone_session;
+    memset(&session, 0, sizeof(full_session_t));
+    memset(&cone_session, 0, sizeof(cone_session_t));
+
+    // char *basepath = getenv("USER");
+    char *basepath = "/home/philpi";
 
     if(gpioInitialise() == PI_INIT_FAILED) {
 	    printf("Error initializing pigpio\n");
@@ -28,10 +37,15 @@ int main(void) {
 	signal(SIGINT, sig_handler);
 	signal(SIGKILL, sig_handler);
 
-    pin_setup();
+    user_data.basepath = basepath;
+    user_data.cone = &cone;
+    user_data.session = &session;
+    user_data.cone_session = &cone_session;
 
-    led_t *led_gn = led_new(P_LED_GN);
-    led_t *led_rd = led_new(P_LED_RD);
+    pin_setup(&user_data);
+
+    led_gn = led_new(P_LED_GN);
+    led_rd = led_new(P_LED_RD);
 
     led_set_state(led_gn, 100, 100);
     led_set_state(led_rd, 1000, 500);
@@ -50,7 +64,6 @@ int main(void) {
     double lat, lon, alt;
     gps_parsed_data_t gps_data;
 
-    cone_t cone;
     while(1) {
 	    led_run();
 
@@ -67,7 +80,7 @@ int main(void) {
             continue;
         }
 
-        gps_parse_buffer(&gps_data, &match, line, 0);
+        gps_parse_buffer(&gps_data, &match, line, get_t());
 
         if(match.protocol == GPS_PROTOCOL_TYPE_UBX) {
             if(match.message == GPS_UBX_TYPE_NAV_HPPOSLLH) {
@@ -82,45 +95,8 @@ int main(void) {
             }
         }
 
-        if(gpioRead(P_BTN_MODE) == 1) {
-            if(session.active) {
-                csv_session_stop(&session);
-                printf("Session ended\n");
-                led_set_state(led_rd, 0, 0);
-            } else {
-                csv_session_setup(&session, basepath);
-                csv_session_start(&session);
-                printf("Session started\n");
-                led_set_state(led_rd, 1000, 0);
-            }
-        }
-
         if(session.active) {
             gps_to_file(&session.files, &gps_data, &match);
-        }
-
-        if(gpioRead(P_BTN_YL) || gpioRead(P_BTN_BL) || gpioRead(P_BTN_OR)) {
-            if(cone_session.active == 0) {
-                cone_session_setup(&cone_session, basepath);
-                cone_session_start(&cone_session);
-                printf("Cone session started\n");
-            }
-        }
-
-        if(gpioRead(P_BTN_YL)) {
-            cone.id = CONE_ID_YELLOW;
-            cone_session_write(&cone_session, &cone);
-            led_blink_once(led_gn, 100);
-        }
-        if(gpioRead(P_BTN_BL)) {
-            cone.id = CONE_ID_BLUE;
-            cone_session_write(&cone_session, &cone);
-            led_blink_once(led_gn, 100);
-        }
-        if(gpioRead(P_BTN_OR)) {
-            cone.id = CONE_ID_ORANGE;
-            cone_session_write(&cone_session, &cone);
-            led_blink_once(led_gn, 100);
         }
     }
 
@@ -136,7 +112,7 @@ void sig_handler(int signum) {
 	}
 }
 
-void pin_setup() {
+void pin_setup(user_data_t *user_data) {
     gpioSetMode(P_LED_GN, PI_OUTPUT);
     gpioSetMode(P_LED_RD, PI_OUTPUT);
     gpioSetMode(P_BTN_YL, PI_INPUT);
@@ -148,6 +124,61 @@ void pin_setup() {
     gpioSetPullUpDown(P_BTN_OR, PI_PUD_UP);
     gpioSetPullUpDown(P_BTN_BL, PI_PUD_UP);
     gpioSetPullUpDown(P_BTN_MODE, PI_PUD_UP);
+
+    gpioSetAlertFuncEx(P_BTN_YL, pin_interrupt, user_data);
+    gpioSetAlertFuncEx(P_BTN_OR, pin_interrupt, user_data);
+    gpioSetAlertFuncEx(P_BTN_BL, pin_interrupt, user_data);
+    gpioSetAlertFuncEx(P_BTN_MODE, pin_interrupt, user_data);
+}
+
+void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
+    if(gpioSkipForDebounce(gpio, level)) return;
+    if(level != 0) return;
+
+    user_data_t *data = (user_data_t *)user_data;
+
+    switch(gpio) {
+        case P_BTN_MODE:
+            if(data->session->active) {
+                csv_session_stop(data->session);
+                printf("Session ended\n");
+                led_set_state(led_rd, 0, 0);
+            } else {
+                csv_session_setup(data->session, data->basepath);
+                csv_session_start(data->session);
+                printf("Session started\n");
+                led_set_state(led_rd, 1000, 0);
+            }
+        break;
+        case P_BTN_YL:
+        case P_BTN_OR:
+        case P_BTN_BL:
+            if(data->cone_session->active == 0) {
+                cone_session_setup(data->cone_session, data->basepath);
+                cone_session_start(data->cone_session);
+                printf("Cone session started\n");
+            }
+        break;
+        default:
+            break;
+    }
+
+    static uint64_t t_cone[CONE_ID_SIZE];
+    if(gpio == P_BTN_YL || gpio == P_BTN_BL || gpio == P_BTN_OR) {
+        if(gpio == P_BTN_YL) {
+            data->cone->id = CONE_ID_YELLOW;
+        } else if(gpio == P_BTN_BL) {
+            data->cone->id = CONE_ID_BLUE;
+        } else if(gpio == P_BTN_OR) {
+            data->cone->id = CONE_ID_ORANGE;
+        }
+
+        if(get_t() - t_cone[data->cone->id] > CONE_REPRESS_US) {
+            cone_session_write(data->cone_session, data->cone);
+            led_blink_once(led_gn, 100);
+        }
+        t_cone[data->cone->id] = get_t();
+    }
 }
 
 int dir_exist_or_create(char *path) {
@@ -169,8 +200,8 @@ int dir_next_number(char *path, char *basename) {
     if((dir = opendir(path)) != NULL) {
         while((ent = readdir(dir)) != NULL) {
             if(ent->d_type == DT_DIR) {
-                if(strncmp(ent->d_name, basename, 8) == 0) {
-                    int number = atoi(ent->d_name + 8);
+                if(strncmp(ent->d_name, basename, strlen(basename)) == 0) {
+                    int number = atoi(ent->d_name + strlen(basename));
                     if(number > count) {
                         count = number;
                     }
@@ -208,7 +239,7 @@ int cone_session_start(cone_session_t *session) {
     }
 
     char cones_path[2048];
-    snprintf(cones_path, 2048, "%scones.csv", session->session_path);
+    snprintf(cones_path, 2048, "%s/cones.csv", session->session_path);
     session->file = fopen(cones_path, "w");
     if(session->file == NULL) {
         perror("Could not open cones file");
@@ -268,4 +299,5 @@ int csv_session_stop(full_session_t *session) {
 
 void cone_session_write(cone_session_t *session, cone_t *cone) {
     fprintf(session->file, "%" PRIu64 ",%d,%f,%f,%f\n", cone->timestamp, cone->id, cone->lat, cone->lon, cone->alt);
+    fflush(session->file);
 }
