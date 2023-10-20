@@ -1,17 +1,18 @@
 #include "led.h"
+#include "gpio.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
-#include <sys/time.h>
-#include <pigpio.h>
+#include <time.h>
 
 typedef struct _led_t{
 	int PIN;
 	int on_us;
 	int off_us;
 	int state;
+	int one_shot;
 	uint32_t t;
 }led_t;
 
@@ -33,6 +34,7 @@ led_t *led_new(int pin) {
 	leds[last_led].on_us = 0;
 	leds[last_led].off_us = 0;
 	leds[last_led].state = 0;
+	leds[last_led].one_shot = 0;
 	leds[last_led].t = get_t();
 
 	return &(leds[last_led]);
@@ -40,11 +42,16 @@ led_t *led_new(int pin) {
 
 void led_set_state(led_t *led, int on_ms, int off_ms) {
 	assert(led);
+	led->one_shot = 0;
 	led->on_us = on_ms * 1e3;
 	led->off_us = off_ms * 1e3;
-	led->t = get_t();
+}
 
-	gpioWrite(led->PIN, 0);
+void led_blink_once(led_t *led, int on_ms) {
+	assert(led);
+	led->one_shot = 1;
+	led->on_us = on_ms * 1e3;
+	led->off_us = 0;
 }
 
 void led_run() {
@@ -54,6 +61,10 @@ void led_run() {
 		gpioWrite(leds[i].PIN, cond);
 		if(t - leds[i].t > (leds[i].on_us + leds[i].off_us)) {
 			leds[i].t = get_t();
+			if(leds[i].one_shot) {
+				leds[i].on_us = 0;
+				leds[i].off_us = 0;
+			}
 		}
 	}
 }

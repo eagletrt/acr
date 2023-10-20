@@ -1,15 +1,131 @@
 #include "main.h"
+#include "gpio.h"
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <pigpio.h>
 #include <unistd.h>
 #include <signal.h>
 #include <termios.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <string.h>
 
 #include "defines.h"
 #include "led.h"
-#include "gpslib/gps_interface.h"
+
+full_session_t session;
+cone_session_t cone_session;
+
+int main(void) {
+    printf("ACR: Advanced Cone Registration\n");
+
+    char *basepath = getenv("HOME");
+
+    if(gpioInitialise() == PI_INIT_FAILED) {
+	    printf("Error initializing pigpio\n");
+	    exit(EXIT_FAILURE);
+    }
+
+	signal(SIGINT, sig_handler);
+	signal(SIGKILL, sig_handler);
+
+    pin_setup();
+
+    led_t *led_gn = led_new(P_LED_GN);
+    led_t *led_rd = led_new(P_LED_RD);
+
+    led_set_state(led_gn, 100, 100);
+    led_set_state(led_rd, 1000, 500);
+
+    gps_serial_port gps;
+    int res = gps_interface_open(&gps, "/dev/ttyACM0", B230400);
+    // int res = gps_interface_open_file(&gps, "/home/philpi/gps_0.log");
+    if(res == -1) {
+	    printf("Could not open gps serial port\n");
+	    exit(EXIT_FAILURE);
+    }
+
+    const char start_sequence[GPS_MAX_START_SEQUENCE_SIZE];
+    char line[GPS_MAX_LINE_SIZE];
+
+    double lat, lon, alt;
+    gps_parsed_data_t gps_data;
+
+    cone_t cone;
+    while(1) {
+	    led_run();
+
+	    int start_size, line_size;
+        gps_protocol_type protocol;
+	    protocol = gps_interface_get_line(&gps, start_sequence, &start_size, line, &line_size, true);
+        if(protocol == GPS_PROTOCOL_TYPE_SIZE) {
+            continue;
+        }
+
+        gps_protocol_and_message match;
+        res = gps_match_message(&match, line, protocol);
+        if(res == -1) {
+            continue;
+        }
+
+        gps_parse_buffer(&gps_data, &match, line, 0);
+
+        if(match.protocol == GPS_PROTOCOL_TYPE_UBX) {
+            if(match.message == GPS_UBX_TYPE_NAV_HPPOSLLH) {
+                lat = gps_data.hpposllh.lat;
+                lon = gps_data.hpposllh.lon;
+                alt = gps_data.hpposllh.height;
+
+                cone.timestamp = gps_data.hpposllh._timestamp;
+                cone.lat = lat;
+                cone.lon = lon;
+                cone.alt = alt;
+            }
+        }
+
+        if(gpioRead(P_BTN_MODE) == 1) {
+            if(session.active) {
+                csv_session_stop(&session);
+                printf("Session ended\n");
+                led_set_state(led_rd, 0, 0);
+            } else {
+                csv_session_setup(&session, basepath);
+                csv_session_start(&session);
+                printf("Session started\n");
+                led_set_state(led_rd, 1000, 0);
+            }
+        }
+
+        if(session.active) {
+            gps_to_file(&session.files, &gps_data, &match);
+        }
+
+        if(gpioRead(P_BTN_YL) || gpioRead(P_BTN_BL) || gpioRead(P_BTN_OR)) {
+            if(cone_session.active == 0) {
+                cone_session_setup(&cone_session, basepath);
+                cone_session_start(&cone_session);
+                printf("Cone session started\n");
+            }
+        }
+
+        if(gpioRead(P_BTN_YL)) {
+            cone.id = CONE_ID_YELLOW;
+            cone_session_write(&cone_session, &cone);
+            led_blink_once(led_gn, 100);
+        }
+        if(gpioRead(P_BTN_BL)) {
+            cone.id = CONE_ID_BLUE;
+            cone_session_write(&cone_session, &cone);
+            led_blink_once(led_gn, 100);
+        }
+        if(gpioRead(P_BTN_OR)) {
+            cone.id = CONE_ID_ORANGE;
+            cone_session_write(&cone_session, &cone);
+            led_blink_once(led_gn, 100);
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
 
 void sig_handler(int signum) {
 	if(signum == SIGKILL || signum == SIGINT) {
@@ -20,17 +136,7 @@ void sig_handler(int signum) {
 	}
 }
 
-int main(void) {
-    printf("ACR: Advanced Cone Registration\n");
-
-    if(gpioInitialise() == PI_INIT_FAILED) {
-	    printf("Error initializing pigpio\n");
-	    exit(EXIT_FAILURE);
-    }
-
-	signal(SIGINT, sig_handler);
-	signal(SIGKILL, sig_handler);
-
+void pin_setup() {
     gpioSetMode(P_LED_GN, PI_OUTPUT);
     gpioSetMode(P_LED_RD, PI_OUTPUT);
     gpioSetMode(P_BTN_YL, PI_INPUT);
@@ -42,31 +148,124 @@ int main(void) {
     gpioSetPullUpDown(P_BTN_OR, PI_PUD_UP);
     gpioSetPullUpDown(P_BTN_BL, PI_PUD_UP);
     gpioSetPullUpDown(P_BTN_MODE, PI_PUD_UP);
+}
 
-    led_t *led_gn = led_new(P_LED_GN);
-    led_t *led_rd = led_new(P_LED_RD);
+int dir_exist_or_create(char *path) {
+    DIR *dir;
+    struct dirent *ent;
+    if(opendir(path) == NULL) {
+        if(mkdir(path, 0777) == -1) {
+            fprintf(stderr, "Could not create directory %s\n", path);
+            return -1;
+        }
+    }
+    return 0;
+}
 
-    led_set_state(led_gn, 100, 100);
-    led_set_state(led_rd, 1000, 500);
+int dir_next_number(char *path, char *basename) {
+    DIR *dir;
+    int count = 0;
+    struct dirent *ent;
+    if((dir = opendir(path)) != NULL) {
+        while((ent = readdir(dir)) != NULL) {
+            if(ent->d_type == DT_DIR) {
+                if(strncmp(ent->d_name, basename, 8) == 0) {
+                    int number = atoi(ent->d_name + 8);
+                    if(number > count) {
+                        count = number;
+                    }
+                }
+            }
+        }
+        closedir(dir);
+    } else {
+        fprintf(stderr, "Could not open directory %s\n", path);
+        return -1;
+    }
+    return count;
+}
 
-    gps_serial_port gps;
-    // int res = gps_interface_open(&gps, "/dev/ttyACM0", B230400);
-    int res = gps_interface_open_file(&gps, "/home/philpi/gps_0.log");
-    if(res == -1) {
-	    printf("Could not open gps serial port\n");
-	    exit(EXIT_FAILURE);
+int cone_session_setup(cone_session_t *session, char *basepath) {
+    strcpy(session->session_path, basepath);
+
+    strcat(session->session_path, "/logs/acr/");
+
+    if(dir_exist_or_create(session->session_path) == -1) {
+        return -1;
+    }
+    
+    int session_count = dir_next_number(session->session_path, "cones_");
+
+    snprintf(session->session_name, 1025, "cones_%03d", session_count + 1);
+    strcat(session->session_path, session->session_name);
+
+    return 0;
+}
+
+int cone_session_start(cone_session_t *session) {
+    if(dir_exist_or_create(session->session_path) == -1) {
+        return -1;
     }
 
-    const char start_sequence[GPS_MAX_START_SEQUENCE_SIZE];
-    char line[GPS_MAX_LINE_SIZE];
-
-    while(1) {
-	    int start_size, line_size;
-	    gps_interface_get_line(&gps, start_sequence, &start_size, line, &line_size, true);
-	    printf("%s\n", line);
-	    led_run();
-
+    char cones_path[2048];
+    snprintf(cones_path, 2048, "%scones.csv", session->session_path);
+    session->file = fopen(cones_path, "w");
+    if(session->file == NULL) {
+        perror("Could not open cones file");
+        return -1;
     }
 
-    return EXIT_SUCCESS;
+    fprintf(session->file, "timestamp,id,lat,lon,alt\n");
+    session->active = 1;
+
+    return 0;
+}
+
+int cone_session_stop(cone_session_t *session) {
+    fclose(session->file);
+    session->active = 0;
+    return 0;
+}
+
+int csv_session_setup(full_session_t *session, char *basepath) {
+    strcpy(session->session_path, basepath);
+    strcat(session->session_path, "/logs/acr/");
+
+    if(dir_exist_or_create(session->session_path) == -1) {
+        return -1;
+    }
+    
+    int session_count = dir_next_number(session->session_path, "trajectory_");
+
+    snprintf(session->session_name, 1025, "trajectory_%03d", session_count + 1);
+    strcat(session->session_path, session->session_name);
+
+    return 0;
+}
+int csv_session_start(full_session_t *session) {
+    if(dir_exist_or_create(session->session_path) == -1) {
+        return -1;
+    }
+
+    char gps_path[2048];
+    snprintf(gps_path, 2048, "%s/gps", session->session_path);
+    if(dir_exist_or_create(gps_path) == -1) {
+        return -1;
+    }
+
+    gps_open_files(&session->files, gps_path);
+    gps_header_to_file(&session->files);
+
+    session->active = 1;
+
+    return 0;
+}
+int csv_session_stop(full_session_t *session) {
+    gps_close_files(&session->files);
+    session->active = 0;
+    return 0;
+}
+
+void cone_session_write(cone_session_t *session, cone_t *cone) {
+    fprintf(session->file, "%" PRIu64 ",%d,%f,%f,%f\n", cone->timestamp, cone->id, cone->lat, cone->lon, cone->alt);
 }

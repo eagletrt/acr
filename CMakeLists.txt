@@ -6,7 +6,13 @@ set(CMAKE_CXX_STANDARD 17)
 
 find_library(pigpio_LIBRARY 
 	NAMES libpigpio.so
-	HINTS /usr/local/lib)
+	HINTS /usr/local/lib
+)
+if(${pigpio_LIBRARY} STREQUAL "pigpio_LIBRARY-NOTFOUND")
+	message(WARNING "pigpio not found")
+	set(pigpio_LIBRARY "")
+	add_compile_definitions(ACR_NO_PIGPIO)
+endif()
 
 include_directories(
     ${CMAKE_CURRENT_LIST_DIR}/inc
@@ -15,7 +21,8 @@ include_directories(
 
 add_library(acr
 	STATIC
-	src/led.c
+	${CMAKE_CURRENT_LIST_DIR}/src/led.c
+	${CMAKE_CURRENT_LIST_DIR}/src/gpio.c
 )
 target_link_libraries(acr PUBLIC ${pigpio_LIBRARY})
 
@@ -26,4 +33,4 @@ add_library(gps
 )
 
 add_executable(main src/main.c)
-target_link_libraries(main acr gps)
+target_link_libraries(main acr gps m)

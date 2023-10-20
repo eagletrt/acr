@@ -20,4 +20,6 @@ void led_run();
 // Change blink state
 void led_set_state(led_t *led, int on_ms, int off_ms);
 
+void led_blink_once(led_t *led, int on_ms);
+
 #endif // LED_H
