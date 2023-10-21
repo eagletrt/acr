@@ -9,9 +9,9 @@
 #include <time.h>
 
 typedef struct _led_t{
-	int PIN;
-	int on_us;
-	int off_us;
+	uint8_t PIN;
+	uint32_t on_us;
+	uint32_t off_us;
 	int state;
 	int one_shot;
 	uint32_t t;

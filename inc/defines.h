@@ -15,6 +15,8 @@
 
 #define DEBOUNCE_US (10000)
 
+#define CONE_ENABLE_MEAN (1)
+#define CONE_MEAN_COMPLEMENTARY (0.9)
 #define CONE_REPRESS_US (1000000)
 
 #endif // DEFINE_H

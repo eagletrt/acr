@@ -7,12 +7,15 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "defines.h"
 #include "gpio.h"
 #include "utils.h"
 #include "led.h"
 
+pthread_t led_thread;
+int kill_thread = 0;
 led_t *led_gn;
 led_t *led_rd;
 
@@ -25,6 +28,7 @@ int main(void) {
     cone_session_t cone_session;
     memset(&session, 0, sizeof(full_session_t));
     memset(&cone_session, 0, sizeof(cone_session_t));
+    memset(&user_data, 0, sizeof(user_data_t));
 
     // char *basepath = getenv("USER");
     char *basepath = "/home/philpi";
@@ -44,11 +48,13 @@ int main(void) {
 
     pin_setup(&user_data);
 
+    pthread_create(&led_thread, NULL, led_runner, NULL); 
+
     led_gn = led_new(P_LED_GN);
     led_rd = led_new(P_LED_RD);
 
-    led_set_state(led_gn, 100, 100);
-    led_set_state(led_rd, 1000, 500);
+    led_blink_once(led_gn, 100);
+    led_blink_once(led_rd, 100);
 
     gps_serial_port gps;
     int res = gps_interface_open(&gps, "/dev/ttyACM0", B230400);
@@ -58,15 +64,22 @@ int main(void) {
 	    exit(EXIT_FAILURE);
     }
 
-    const char start_sequence[GPS_MAX_START_SEQUENCE_SIZE];
+    led_blink_once(led_gn, 100);
+    led_blink_once(led_rd, 100);
+
+    unsigned char start_sequence[GPS_MAX_START_SEQUENCE_SIZE];
     char line[GPS_MAX_LINE_SIZE];
 
     double lat, lon, alt;
     gps_parsed_data_t gps_data;
 
-    while(1) {
-	    led_run();
+    led_set_state(led_gn, 100, 50);
+    led_set_state(led_rd, 100, 50);
+    usleep(100000);
+    led_set_state(led_gn, 0, 0);
+    led_set_state(led_rd, 0, 0);
 
+    while(!kill_thread) {
 	    int start_size, line_size;
         gps_protocol_type protocol;
 	    protocol = gps_interface_get_line(&gps, start_sequence, &start_size, line, &line_size, true);
@@ -89,25 +102,59 @@ int main(void) {
                 alt = gps_data.hpposllh.height;
 
                 cone.timestamp = gps_data.hpposllh._timestamp;
-                cone.lat = lat;
-                cone.lon = lon;
-                cone.alt = alt;
+                if (CONE_ENABLE_MEAN && user_data.requested_save) {
+                    cone.lat = cone.lat * CONE_MEAN_COMPLEMENTARY + lat * (1.0 - CONE_MEAN_COMPLEMENTARY);
+                    cone.lon = cone.lon * CONE_MEAN_COMPLEMENTARY + lon * (1.0 - CONE_MEAN_COMPLEMENTARY);
+                    cone.alt = cone.alt * CONE_MEAN_COMPLEMENTARY + alt * (1.0 - CONE_MEAN_COMPLEMENTARY);
+                } else {
+                    cone.lat = lat;
+                    cone.lon = lon;
+                    cone.alt = alt;
+                }
             }
         }
 
         if(session.active) {
             gps_to_file(&session.files, &gps_data, &match);
         }
+
+        static uint64_t cone_t = 0;
+        static int request_toggled = 0;
+        if(user_data.requested_save && request_toggled == 0) {
+            user_data.requested_save = 0;
+            request_toggled = 1;
+            cone_t = get_t();
+        }
+        if(request_toggled && get_t() - cone_t > CONE_REPRESS_US) {
+            cone_session_write(&cone_session, &cone);
+            FILE *tmp = cone_session.file;
+            cone_session.file = stdout;
+            cone_session_write(&cone_session, &cone);
+            cone_session.file = tmp;
+            led_set_state(led_gn, 0, 0);
+            request_toggled = 0;
+        }
     }
 
     return EXIT_SUCCESS;
 }
 
+void *led_runner() {
+    while(!kill_thread) {
+	    led_run();
+        usleep(1000);
+    }
+    return NULL;
+}
+
 void sig_handler(int signum) {
 	if(signum == SIGKILL || signum == SIGINT) {
+        kill_thread = 1;
+        pthread_join(led_thread, NULL);
 		gpioWrite(P_LED_GN, 0);
 		gpioWrite(P_LED_RD, 0);
 		gpioTerminate();
+        printf("\rExiting\n");
 		exit(EXIT_FAILURE);
 	}
 }
@@ -132,6 +179,7 @@ void pin_setup(user_data_t *user_data) {
 }
 
 void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
+    (void)tick;
     if(gpioSkipForDebounce(gpio, level)) return;
     if(level != 0) return;
 
@@ -141,12 +189,12 @@ void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
         case P_BTN_MODE:
             if(data->session->active) {
                 csv_session_stop(data->session);
-                printf("Session ended\n");
+                printf("Session %s ended\n", data->session->session_name);
                 led_set_state(led_rd, 0, 0);
             } else {
                 csv_session_setup(data->session, data->basepath);
                 csv_session_start(data->session);
-                printf("Session started\n");
+                printf("Session %s started [%s]\n", data->session->session_name, data->session->session_path);
                 led_set_state(led_rd, 1000, 0);
             }
         break;
@@ -156,7 +204,7 @@ void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
             if(data->cone_session->active == 0) {
                 cone_session_setup(data->cone_session, data->basepath);
                 cone_session_start(data->cone_session);
-                printf("Cone session started\n");
+                printf("Cone session %s started [%s]\n", data->cone_session->session_name, data->cone_session->session_path);
             }
         break;
         default:
@@ -174,16 +222,19 @@ void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
         }
 
         if(get_t() - t_cone[data->cone->id] > CONE_REPRESS_US) {
-            cone_session_write(data->cone_session, data->cone);
-            led_blink_once(led_gn, 100);
+            data->requested_save = 1;
+            led_set_state(led_gn, 1000, 0);
         }
-        t_cone[data->cone->id] = get_t();
+
+        // Update time for each cone.
+        // Preventing that two cones are saved simultaneously
+        for(int i = 0; i < CONE_ID_SIZE; i++) {
+            t_cone[i] = get_t();
+        }
     }
 }
 
 int dir_exist_or_create(char *path) {
-    DIR *dir;
-    struct dirent *ent;
     if(opendir(path) == NULL) {
         if(mkdir(path, 0777) == -1) {
             fprintf(stderr, "Could not create directory %s\n", path);
@@ -298,6 +349,23 @@ int csv_session_stop(full_session_t *session) {
 }
 
 void cone_session_write(cone_session_t *session, cone_t *cone) {
-    fprintf(session->file, "%" PRIu64 ",%d,%f,%f,%f\n", cone->timestamp, cone->id, cone->lat, cone->lon, cone->alt);
+    fprintf(session->file, "%" PRIu64 ",%d,%s,%f,%f,%f\n", cone->timestamp, cone->id, cone_id_to_string(cone->id), cone->lat, cone->lon, cone->alt);
     fflush(session->file);
+}
+
+const char *cone_id_to_string(cone_id id) {
+    switch(id) {
+        case CONE_ID_YELLOW:
+            return "YELLOW";
+            break;
+        case CONE_ID_BLUE:
+            return "BLUE";
+            break;
+        case CONE_ID_ORANGE:
+            return "ORANGE";
+            break;
+        default:
+            return "UNKNOWN_CONE";
+            break;
+    }
 }

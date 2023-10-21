@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.18)
 project(ACR)
 
 set(CMAKE_CXX_STANDARD 17)
+add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
 find_library(pigpio_LIBRARY 
 	NAMES libpigpio.so
@@ -34,4 +35,4 @@ add_library(gps
 )
 
 add_executable(main src/main.c)
-target_link_libraries(main acr gps m)
+target_link_libraries(main acr gps m pthread)
