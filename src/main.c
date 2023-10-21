@@ -15,6 +15,7 @@
 #include "led.h"
 
 pthread_t led_thread;
+int in_error_state = 0;
 int kill_thread = 0;
 led_t *led_gn;
 led_t *led_rd;
@@ -34,8 +35,7 @@ int main(void) {
     char *basepath = "/home/philpi";
 
     if(gpioInitialise() == PI_INIT_FAILED) {
-	    printf("Error initializing pigpio\n");
-	    exit(EXIT_FAILURE);
+	    error_state(ERROR_GPIO_INIT);
     }
 
 	signal(SIGINT, sig_handler);
@@ -53,19 +53,14 @@ int main(void) {
     led_gn = led_new(P_LED_GN);
     led_rd = led_new(P_LED_RD);
 
-    led_blink_once(led_gn, 100);
-    led_blink_once(led_rd, 100);
+    led_set_state(led_gn, 200, 300);
+    led_set_state(led_rd, 200, 300);
 
     gps_serial_port gps;
     int res = gps_interface_open(&gps, "/dev/ttyACM0", B230400);
-    // int res = gps_interface_open_file(&gps, "/home/philpi/gps_0.log");
     if(res == -1) {
-	    printf("Could not open gps serial port\n");
-	    exit(EXIT_FAILURE);
+	    error_state(ERROR_GPS_NOT_FOUND);
     }
-
-    led_blink_once(led_gn, 100);
-    led_blink_once(led_rd, 100);
 
     unsigned char start_sequence[GPS_MAX_START_SEQUENCE_SIZE];
     char line[GPS_MAX_LINE_SIZE];
@@ -73,18 +68,24 @@ int main(void) {
     double lat, lon, alt;
     gps_parsed_data_t gps_data;
 
-    led_set_state(led_gn, 100, 50);
-    led_set_state(led_rd, 100, 50);
-    usleep(100000);
+    usleep(1e6);
+
     led_set_state(led_gn, 0, 0);
     led_set_state(led_rd, 0, 0);
 
+    int fail_count = 0;
     while(!kill_thread) {
 	    int start_size, line_size;
         gps_protocol_type protocol;
 	    protocol = gps_interface_get_line(&gps, start_sequence, &start_size, line, &line_size, true);
         if(protocol == GPS_PROTOCOL_TYPE_SIZE) {
+            fail_count ++;
+            if(fail_count > 10) {
+                error_state(ERROR_GPS_READ);
+            }
             continue;
+        } else {
+            fail_count = 0;
         }
 
         gps_protocol_and_message match;
@@ -127,16 +128,52 @@ int main(void) {
         }
         if(request_toggled && get_t() - cone_t > CONE_REPRESS_US) {
             cone_session_write(&cone_session, &cone);
+            // print to stdout
             FILE *tmp = cone_session.file;
             cone_session.file = stdout;
             cone_session_write(&cone_session, &cone);
             cone_session.file = tmp;
+
             led_set_state(led_gn, 0, 0);
             request_toggled = 0;
         }
     }
 
     return EXIT_SUCCESS;
+}
+
+const char *error_to_string(error_t error) {
+    switch(error) {
+        case ERROR_GPIO_INIT:
+            return "ERROR_GPIO_INIT";
+        break;
+        case ERROR_GPS_NOT_FOUND:
+            return "ERROR_GPS_NOT_FOUND";
+        break;
+        case ERROR_GPS_READ:
+            return "ERROR_GPS_READ";
+        break;
+        default:
+            return "ERROR_UNKNOWN";
+        break;
+    }
+}
+
+void error_state(error_t err) {
+    in_error_state = 1;
+    led_set_state(led_gn, 0, 0);
+    led_set_state(led_rd, 0, 0);
+
+    int total_blink_ms = 1000;
+    int increment_ms = total_blink_ms / (ERORR_SIZE * 2);
+    printf("\r\nError: %s\n", error_to_string(err));
+    while(true) {
+        for(uint8_t i = 0; i <= err; i ++) {
+            led_blink_once(led_rd, increment_ms);
+            usleep(2 * increment_ms * 1e3);
+        }
+        usleep((total_blink_ms - increment_ms)*1e3);
+    }
 }
 
 void *led_runner() {
@@ -182,6 +219,14 @@ void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
     (void)tick;
     if(gpioSkipForDebounce(gpio, level)) return;
     if(level != 0) return;
+
+    if(in_error_state){
+        if(!gpioRead(P_BTN_BL) && !gpioRead(P_BTN_OR)) {
+            printf("\nRequested kill\n");
+            raise(SIGKILL);
+        }
+        return;
+    }
 
     user_data_t *data = (user_data_t *)user_data;
 

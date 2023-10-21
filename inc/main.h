@@ -12,6 +12,14 @@ typedef enum cone_id {
     CONE_ID_SIZE = 3
 }cone_id;
 
+typedef enum error_t {
+    ERROR_GPIO_INIT,
+    ERROR_GPS_NOT_FOUND,
+    ERROR_GPS_READ,
+
+    ERORR_SIZE
+} error_t;
+
 typedef struct cone_t {
     uint64_t timestamp;
     cone_id id;
@@ -19,6 +27,7 @@ typedef struct cone_t {
     double lon;
     double alt;
 }cone_t;
+
 typedef struct full_session_t {
     int active;
     gps_files_t files;
@@ -41,6 +50,9 @@ typedef struct user_data_t {
     full_session_t *session;
     cone_session_t *cone_session;
 }user_data_t;
+
+void error_state(error_t error);
+const char *error_to_string(error_t error);
 
 void *led_runner();
 void sig_handler(int signum);
