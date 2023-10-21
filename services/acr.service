@@ -1,0 +1,12 @@
+[Unit]
+Description = ACR Advanced Cone Registration
+After = network.target
+
+[Service]
+User = root
+Restart=always
+RestartSec=0.5
+ExecStart = /home/pi/github/acr/bin/acr
+
+[Install]
+WantedBy = multi-user.target

@@ -34,5 +34,7 @@ add_library(gps
 	${CMAKE_CURRENT_LIST_DIR}/external/gpslib/gps_interface.c
 )
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin)
+
 add_executable(main src/main.c)
 target_link_libraries(main acr gps m pthread)

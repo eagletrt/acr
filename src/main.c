@@ -23,6 +23,8 @@ led_t *led_rd;
 int main(void) {
     printf("ACR: Advanced Cone Registration\n");
     user_data_t user_data;
+    led_gn = led_new(P_LED_GN);
+    led_rd = led_new(P_LED_RD);
 
     cone_t cone;
     full_session_t session;
@@ -49,9 +51,6 @@ int main(void) {
     pin_setup(&user_data);
 
     pthread_create(&led_thread, NULL, led_runner, NULL); 
-
-    led_gn = led_new(P_LED_GN);
-    led_rd = led_new(P_LED_RD);
 
     led_set_state(led_gn, 200, 300);
     led_set_state(led_rd, 200, 300);
