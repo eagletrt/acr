@@ -63,3 +63,10 @@ void led_run() {
 		}
 	}
 }
+
+void led_on(led_t *led) {
+	led_set_state(led, 1000, 0);
+}
+void led_off(led_t *led) {
+	led_set_state(led, 0, 1000);
+}

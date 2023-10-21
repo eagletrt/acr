@@ -134,7 +134,7 @@ int main(void) {
             cone_session_write(&cone_session, &cone);
             cone_session.file = tmp;
 
-            led_set_state(led_gn, 0, 0);
+            led_off(led_gn);
             request_toggled = 0;
         }
     }
@@ -161,8 +161,8 @@ const char *error_to_string(error_t error) {
 
 void error_state(error_t err) {
     in_error_state = 1;
-    led_set_state(led_gn, 0, 0);
-    led_set_state(led_rd, 0, 0);
+    led_off(led_gn);
+    led_off(led_rd);
 
     int total_blink_ms = 1000;
     int increment_ms = total_blink_ms / (ERORR_SIZE * 2);
@@ -235,12 +235,12 @@ void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
             if(data->session->active) {
                 csv_session_stop(data->session);
                 printf("Session %s ended\n", data->session->session_name);
-                led_set_state(led_rd, 0, 0);
+                led_off(led_rd);
             } else {
                 csv_session_setup(data->session, data->basepath);
                 csv_session_start(data->session);
                 printf("Session %s started [%s]\n", data->session->session_name, data->session->session_path);
-                led_set_state(led_rd, 1000, 0);
+                led_on(led_rd);
             }
         break;
         case P_BTN_YL:
@@ -268,7 +268,7 @@ void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
 
         if(get_t() - t_cone[data->cone->id] > CONE_REPRESS_US) {
             data->requested_save = 1;
-            led_set_state(led_gn, 1000, 0);
+            led_on(led_gn);
         }
 
         // Update time for each cone.
