@@ -84,6 +84,10 @@ int gpioSetPullUpDown(int, int){
     return 0;
 }
 
+void gpioSetAlertFuncEx(int, int, void *){
+
+}
+
 #endif // ACR_NO_PIGPIO
 
 typedef struct deb_t {

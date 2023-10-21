@@ -125,16 +125,22 @@ int main(void) {
             request_toggled = 1;
             cone_t = get_t();
         }
-        if(request_toggled && get_t() - cone_t > CONE_REPRESS_US) {
-            cone_session_write(&cone_session, &cone);
-            // print to stdout
-            FILE *tmp = cone_session.file;
-            cone_session.file = stdout;
-            cone_session_write(&cone_session, &cone);
-            cone_session.file = tmp;
+        if(request_toggled) {
+            if(CONE_ENABLE_MEAN == 0 || get_t() - cone_t > CONE_REPRESS_US) {
+                cone_session_write(&cone_session, &cone);
+                // print to stdout
+                FILE *tmp = cone_session.file;
+                cone_session.file = stdout;
+                cone_session_write(&cone_session, &cone);
+                cone_session.file = tmp;
 
-            led_off(led_gn);
-            request_toggled = 0;
+                if(CONE_ENABLE_MEAN) {
+                    led_off(led_gn);
+                } else {
+                    led_blink_once(led_gn, 100);
+                }
+                request_toggled = 0;
+            }
         }
     }
 
@@ -341,7 +347,7 @@ int cone_session_start(cone_session_t *session) {
         return -1;
     }
 
-    fprintf(session->file, "timestamp,id,lat,lon,alt\n");
+    fprintf(session->file, "timestamp,cone_id,cone_name,lat,lon,alt\n");
     session->active = 1;
 
     return 0;
