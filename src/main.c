@@ -158,6 +158,18 @@ const char *error_to_string(error_t error) {
         case ERROR_GPS_READ:
             return "ERROR_GPS_READ";
         break;
+        case ERROR_CONE_SESSION_SETUP:
+            return "ERROR_CONE_SESSION_SETUP";
+        break;
+        case ERROR_CONE_SESSION_START:
+            return "ERROR_CONE_SESSION_START";
+        break;
+        case ERROR_FULL_SESSION_SETUP:
+            return "ERROR_FULL_SESSION_SETUP";
+        break;
+        case ERROR_FULL_SESSION_START:
+            return "ERROR_FULL_SESSION_START";
+        break;
         default:
             return "ERROR_UNKNOWN";
         break;
@@ -169,7 +181,7 @@ void error_state(error_t err) {
     led_off(led_gn);
     led_off(led_rd);
 
-    int total_blink_ms = 1000;
+    int total_blink_ms = 2000;
     int increment_ms = total_blink_ms / (ERORR_SIZE * 2);
     printf("\r\nError: %s\n", error_to_string(err));
     while(true) {
@@ -242,8 +254,12 @@ void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
                 printf("Session %s ended\n", data->session->session_name);
                 led_off(led_rd);
             } else {
-                csv_session_setup(data->session, data->basepath);
-                csv_session_start(data->session);
+                if(csv_session_setup(data->session, data->basepath) == -1) {
+                    error_state(ERROR_FULL_SESSION_SETUP);
+                }
+                if(csv_session_start(data->session) == -1) {
+                    error_state(ERROR_FULL_SESSION_START);
+                }
                 printf("Session %s started [%s]\n", data->session->session_name, data->session->session_path);
                 led_on(led_rd);
             }
@@ -252,8 +268,12 @@ void pin_interrupt(int gpio, int level, uint32_t tick, void *user_data) {
         case P_BTN_OR:
         case P_BTN_BL:
             if(data->cone_session->active == 0) {
-                cone_session_setup(data->cone_session, data->basepath);
-                cone_session_start(data->cone_session);
+                if(cone_session_setup(data->cone_session, data->basepath) == -1) {
+                    error_state(ERROR_CONE_SESSION_SETUP);
+                }
+                if(cone_session_start(data->cone_session) == -1) {
+                    error_state(ERROR_CONE_SESSION_START);
+                }
                 printf("Cone session %s started [%s]\n", data->cone_session->session_name, data->cone_session->session_path);
             }
         break;

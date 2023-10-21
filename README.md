@@ -1,7 +1,7 @@
 # ACR
 Advanced Cone Registration
 
-Tool to collect data fron track-walks before taces.
+Tool to collect data fron track-walks before races.
 With a raspberry and a GPS connected to it, ACR allows to log cones positions.
 
 ## Shield
@@ -63,13 +63,17 @@ typedef enum error_t {
     ERROR_GPIO_INIT,
     ERROR_GPS_NOT_FOUND,
     ERROR_GPS_READ,
+    ERROR_CONE_SESSION_SETUP,
+    ERROR_CONE_SESSION_START,
+    ERROR_FULL_SESSION_SETUP,
+    ERROR_FULL_SESSION_START,
 
     ERORR_SIZE
 } error_t;
 ~~~
 
 Based on the error a different blink pattern is showed on the Red led.  
-Basically the red led "counts" the error, so if the error is ERROR_GPS_NOT_FOUND, then the led blinks twice. The pattern repeats every second
+Basically the red led "counts" the error, so if the error is ERROR_GPS_NOT_FOUND, then the led blinks twice. The pattern repeats every two seconds.
 
 ### Issue
 The error GPIO_INIT cannot be displayed, the gpio are not initialized and so the led cannot be turned on.

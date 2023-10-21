@@ -74,18 +74,25 @@ int gpioRead(int pin){
     return c == pinToKey(pin);
 }
 int gpioWrite(int pin, int state){
-    // printf("Pin %d set to %d\n", pin, state);
+    (void)pin;
+    (void)state;
     return 0;
 }
-int gpioSetMode(int, int){
+int gpioSetMode(int pin, int mode){
+    (void)pin;
+    (void)mode;
     return 0;
 }
-int gpioSetPullUpDown(int, int){
+int gpioSetPullUpDown(int pin, int pud){
+    (void)pin;
+    (void)pud;
     return 0;
 }
 
-void gpioSetAlertFuncEx(int, int, void *){
-
+void gpioSetAlertFuncEx(int pin, eventFuncEx_t func, void *user_data) {
+    (void)pin;
+    (void)func;
+    (void)user_data;
 }
 
 #endif // ACR_NO_PIGPIO

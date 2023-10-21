@@ -13,6 +13,8 @@
 
 #define PI_INIT_FAILED -1
 
+typedef void (*eventFuncEx_t)(int event, int level, uint32_t tick, void *userdata);
+
 int gpioInitialise();
 int gpioTerminate();
 
@@ -20,6 +22,7 @@ int gpioRead(int);
 int gpioWrite(int, int);
 int gpioSetMode(int, int);
 int gpioSetPullUpDown(int, int);
+void gpioSetAlertFuncEx(int pin, eventFuncEx_t func, void *user_data);
 
 #endif // ACR_NO_PIGPIO
 
