@@ -1,6 +1,6 @@
 title: [SW] ACR (Advanced Cone Registration)
 nav:
-    1. Overview.md
-    2. Shield.md
-    3. Usage.md
-    4. Output formats.md
+    - 1. Overview.md
+    - 2. Shield.md
+    - 3. Usage.md
+    - 4. Output formats.md
