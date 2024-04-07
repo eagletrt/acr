@@ -21,6 +21,10 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/external/raylib)
 include_directories(
     ${CMAKE_CURRENT_LIST_DIR}/inc
     ${CMAKE_CURRENT_LIST_DIR}/external
+    ${CMAKE_CURRENT_LIST_DIR}/external/imgui
+    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/backends
+    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/misc/cpp
+    ${CMAKE_CURRENT_LIST_DIR}/external/implot
 )
 
 add_library(acr
@@ -43,5 +47,18 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin)
 add_executable(main src/main.c)
 target_link_libraries(main acr gps m pthread)
 
-add_executable(viewer src/viewer.cpp)
-target_link_libraries(viewer acr gps m pthread raylib)
+find_package(GLEW      REQUIRED)
+find_package(OpenGL    REQUIRED)
+find_package(glfw3     REQUIRED)
+add_executable(viewer
+src/viewer.cpp
+external/imgui/imgui.cpp
+external/imgui/imgui_draw.cpp
+external/imgui/imgui_widgets.cpp
+external/imgui/imgui_tables.cpp
+external/imgui/backends/imgui_impl_glfw.cpp
+external/imgui/backends/imgui_impl_opengl2.cpp
+external/implot/implot.cpp
+external/implot/implot_items.cpp
+)
+target_link_libraries(viewer acr gps m pthread GLEW::GLEW OpenGL::GL glfw)

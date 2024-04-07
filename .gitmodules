@@ -4,3 +4,9 @@
 [submodule "external/raylib"]
 	path = external/raylib
 	url = git@github.com:raysan5/raylib.git
+[submodule "imgui"]
+	path = external/imgui
+	url = git@github.com:ocornut/imgui.git
+[submodule "external/implot"]
+	path = external/implot
+	url = git@github.com:epezent/implot.git

@@ -1,5 +1,7 @@
+#define STB_IMAGE_IMPLEMENTATION
 #include "viewer.hpp"
 
+#include <GLFW/glfw3.h>
 #include <string.h>
 
 #include <atomic>
@@ -9,7 +11,13 @@
 #include <thread>
 #include <vector>
 
-#include "raylib/src/raylib.h"
+#include "imgui/imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl2.h"
+#include "imgui_stdlib.h"
+#include "implot.h"
+#include "stb_image.h"
+
 extern "C" {
 #include "acr.h"
 #include "defines.h"
@@ -28,20 +36,38 @@ user_data_t user_data;
 full_session_t session;
 cone_session_t cone_session;
 
-Vector3 latlonheight;
-std::vector<Vector3> trajectory;
+ImVec2 lonlat;
+std::vector<ImVec2> trajectory;
 std::vector<cone_t> cones;
-bool calibrated = false;
-Vector2 offset;
 
+ImVec2 povoBoundTL{11.1484815430000008, 46.0658863580000002};
+ImVec2 povoBoundBR{11.1515535430000003, 46.0689583580000033};
+ImVec2 vadenaBoundTL{46.4300119620000018, 11.3097566090000008};
+ImVec2 vadenaBoundBR{46.4382039620000029, 11.3169246090000009};
 void readGPSLoop();
 
 #define WIN_W 800
 #define WIN_H 800
 
-const double scale = 1000000000.0;
-double XX(double x) { return (x - offset.x) * scale; }
-double YY(double y) { return (y - offset.y) * scale; }
+ImTextureID loadImagePNG(const char *path) {
+  int width, height;
+  unsigned char *data = stbi_load(path, &width, &height, 0, 4);
+  if (data == NULL) {
+    printf("Error loading image: %s\n", path);
+    return 0;
+  }
+  GLuint tex;
+  glGenTextures(1, &tex);
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, data);
+  stbi_image_free(data);
+  return (ImTextureID)(intptr_t)tex;
+}
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -81,31 +107,49 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  std::thread gpsThread(readGPSLoop);
+  if (!glfwInit()) return 1;
 
-  InitWindow(WIN_W, WIN_H, "ACR");
-  SetTargetFPS(24);
-  Camera2D camera;
-  camera.target.x = 0.0;
-  camera.target.y = 0.0;
-  camera.zoom = 0.02;
-  camera.rotation = 0.0;
-  camera.offset = {WIN_W / 2.0, WIN_H / 2.0};
-  while (!WindowShouldClose()) {
-    BeginDrawing();
-    ClearBackground(DARKBROWN);
-    DrawText("Quit (ESC)", 10, 10, 20, RAYWHITE);
-    DrawText("Trajectory (T)", 10, 30, 20, RAYWHITE);
-    DrawText("Cones: ", 10, 50, 20, RAYWHITE);
-    DrawText("- Orange (O) ", 20, 70, 20, RAYWHITE);
-    DrawText("- Yellow (Y)", 20, 90, 20, RAYWHITE);
-    DrawText("- Blue (B)", 20, 110, 20, RAYWHITE);
-    DrawText("Center (C)", 10, 130, 20, RAYWHITE);
-    DrawText("Move (arrows)", 10, 150, 20, RAYWHITE);
+  // Create window with graphics context
+  GLFWwindow *window = glfwCreateWindow(
+      1280, 720, "Dear ImGui GLFW+OpenGL2 example", nullptr, nullptr);
+  if (window == nullptr) return 1;
+  glfwMakeContextCurrent(window);
+  glfwSwapInterval(1);  // Enable vsync
+  ImGui::CreateContext();
+  ImPlot::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  (void)io;
+  io.ConfigFlags |=
+      ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+  ImGui::StyleColorsDark();
+  ImGui_ImplGlfw_InitForOpenGL(window, true);
+  ImGui_ImplOpenGL2_Init();
+
+  ImTextureID povoTex = loadImagePNG("assets/povo.png");
+  ImTextureID vadenaTex = loadImagePNG("assets/vadena.png");
+  std::thread gpsThread(readGPSLoop);
+  ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+  while (!glfwWindowShouldClose(window)) {
+    glfwPollEvents();
+
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL2_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::Begin("ACR");
+    ImGui::Text("Quit (ESC)");
+    ImGui::Text("Trajectory (T)");
+    ImGui::Text("Cones: ");
+    ImGui::Text("- Orange (O)");
+    ImGui::Text("- Yellow (Y)");
+    ImGui::Text("- Blue (B)");
+    ImGui::Text("Center (C)");
+    ImGui::Text("Move (arrows)");
 
     std::unique_lock<std::mutex> lck(renderLock);
 
-    if (IsKeyPressed(KEY_T)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_T)) {
       if (session.active) {
         csv_session_stop(&session);
         printf("Session %s ended\n", session.session_name);
@@ -120,13 +164,13 @@ int main(int argc, char **argv) {
                session.session_path);
       }
     }
-    if (IsKeyPressed(KEY_O)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_O)) {
       cone.id = CONE_ID_ORANGE;
       save_cone.store(true);
-    } else if (IsKeyPressed(KEY_Y)) {
+    } else if (ImGui::IsKeyPressed(ImGuiKey_Y)) {
       cone.id = CONE_ID_YELLOW;
       save_cone.store(true);
-    } else if (IsKeyPressed(KEY_B)) {
+    } else if (ImGui::IsKeyPressed(ImGuiKey_B)) {
       cone.id = CONE_ID_BLUE;
       save_cone.store(true);
     }
@@ -140,59 +184,58 @@ int main(int argc, char **argv) {
       printf("Cone session %s started [%s]\n", cone_session.session_name,
              cone_session.session_path);
     }
-    if (IsKeyPressed(KEY_C)) {
-      camera.target.x = XX(latlonheight.x);
-      camera.target.y = YY(latlonheight.y);
-    }
-    if (IsKeyDown(KEY_UP)) {
-      camera.target.y -= 1000;
-    }
-    if (IsKeyDown(KEY_LEFT)) {
-      camera.target.x -= 1000;
-    }
-    if (IsKeyDown(KEY_DOWN)) {
-      camera.target.y += 1000;
-    }
-    if (IsKeyDown(KEY_RIGHT)) {
-      camera.target.x += 1000;
-    }
-    float wheel = GetMouseWheelMove();
-    if (wheel != 0) {
-      const float zoomIncrement = 0.001f;
-      camera.zoom += (wheel * zoomIncrement);
-      printf("%f\n", camera.zoom);
-      if (camera.zoom < zoomIncrement)
-        camera.zoom = zoomIncrement;
-    }
-    if (IsKeyPressed(KEY_S)) {
-      printf("%f %f\n", camera.target.x, camera.target.y);
-    }
 
-    BeginMode2D(camera);
-    for (size_t i = 0; i < trajectory.size(); ++i) {
-      DrawCircle(XX(trajectory[i].x), YY(trajectory[i].y), 1000, RAYWHITE);
-    }
-    for (size_t i = 0; i < cones.size(); ++i) {
-      Color c;
-      switch (cones[i].id) {
-      case CONE_ID_YELLOW:
-        c = YELLOW;
-        break;
-      case CONE_ID_ORANGE:
-        c = ORANGE;
-        break;
-      case CONE_ID_BLUE:
-        c = BLUE;
-        break;
-      default:
-        c = RAYWHITE;
-        break;
+    if (ImPlot::BeginPlot("GpsPositions", ImVec2(-1, 0), ImPlotFlags_Equal)) {
+      ImPlot::PlotImage("Map", povoTex, povoBoundTL, povoBoundBR, ImVec2(0, 0),
+                        ImVec2(1, 1), ImVec4(1, 1, 1, 1.0));
+
+      ImPlot::PlotScatter("Trajectory", &trajectory[0].x, &trajectory[0].y,
+                          trajectory.size(), 0, 0, sizeof(ImVec2));
+
+      for (size_t i = 0; i < cones.size(); ++i) {
+        ImVec4 c;
+        switch (cones[i].id) {
+          case CONE_ID_YELLOW:
+            c = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+            break;
+          case CONE_ID_ORANGE:
+            c = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
+            break;
+          case CONE_ID_BLUE:
+            c = ImVec4(0.0f, 0.0f, 1.0f, 1.0f);
+            break;
+          default:
+            c = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            break;
+        }
+        ImPlot::SetNextMarkerStyle(ImPlotMarker_Up, 8, c, 0.0);
+        ImPlot::PlotScatter("Cones", &cones[i].lon, &cones[i].lat, 1);
       }
-      DrawRectangle(XX(cones[i].lat), YY(cones[i].lon), 1000, 1000, c);
+      ImPlot::PlotScatter("Current", &lonlat.x, &lonlat.y, 1);
+      ImPlot::EndPlot();
     }
-    DrawCircle(XX(latlonheight.x), YY(latlonheight.y), 1000.0, RED);
-    EndMode2D();
-    EndDrawing();
+    ImGui::End();
+
+    ImGui::Render();
+    int display_w, display_h;
+    glfwGetFramebufferSize(window, &display_w, &display_h);
+    glViewport(0, 0, display_w, display_h);
+    glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w,
+                 clear_color.z * clear_color.w, clear_color.w);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // If you are using this code with non-legacy OpenGL header/contexts (which
+    // you should not, prefer using imgui_impl_opengl3.cpp!!), you may need to
+    // backup/reset/restore other state, e.g. for current shader using the
+    // commented lines below.
+    // GLint last_program;
+    // glGetIntegerv(GL_CURRENT_PROGRAM, &last_program);
+    // glUseProgram(0);
+    ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+    // glUseProgram(last_program);
+
+    glfwMakeContextCurrent(window);
+    glfwSwapBuffers(window);
   }
   kill_thread.store(true);
   gpsThread.join();
@@ -232,37 +275,27 @@ void readGPSLoop() {
     if (match.protocol == GPS_PROTOCOL_TYPE_UBX) {
       if (match.message == GPS_UBX_TYPE_NAV_HPPOSLLH) {
         std::unique_lock<std::mutex> lck(renderLock);
-        printf("New point %f %f\n", gps_data.hpposllh.lat,
-               gps_data.hpposllh.lon);
+        static double height = 0.0;
 
-        if (CONE_ENABLE_MEAN && calibrated) {
-          latlonheight.x =
-              latlonheight.x * CONE_MEAN_COMPLEMENTARY +
-              gps_data.hpposllh.lat * (1.0 - CONE_MEAN_COMPLEMENTARY);
-          latlonheight.y =
-              latlonheight.y * CONE_MEAN_COMPLEMENTARY +
-              gps_data.hpposllh.lon * (1.0 - CONE_MEAN_COMPLEMENTARY);
-          latlonheight.z =
-              latlonheight.z * CONE_MEAN_COMPLEMENTARY +
-              gps_data.hpposllh.height * (1.0 - CONE_MEAN_COMPLEMENTARY);
+        if (CONE_ENABLE_MEAN && lonlat.x != 0.0 && lonlat.y != 0.0) {
+          lonlat.x = lonlat.x * CONE_MEAN_COMPLEMENTARY +
+                     gps_data.hpposllh.lon * (1.0 - CONE_MEAN_COMPLEMENTARY);
+          lonlat.y = lonlat.y * CONE_MEAN_COMPLEMENTARY +
+                     gps_data.hpposllh.lat * (1.0 - CONE_MEAN_COMPLEMENTARY);
+          height = height * CONE_MEAN_COMPLEMENTARY +
+                   gps_data.hpposllh.height * (1.0 - CONE_MEAN_COMPLEMENTARY);
         } else {
-          latlonheight.x = gps_data.hpposllh.lat;
-          latlonheight.y = gps_data.hpposllh.lon;
-          latlonheight.z = gps_data.hpposllh.height;
-        }
-
-        if (!calibrated && latlonheight.x != 0.0 && latlonheight.y != 0.0) {
-          offset.x = latlonheight.x;
-          offset.y = latlonheight.y;
-          calibrated = true;
+          lonlat.x = gps_data.hpposllh.lon;
+          lonlat.y = gps_data.hpposllh.lat;
+          height = gps_data.hpposllh.height;
         }
 
         cone.timestamp = gps_data.hpposllh._timestamp;
-        cone.lat = latlonheight.x;
-        cone.lon = latlonheight.y;
-        cone.alt = latlonheight.z;
+        cone.lon = lonlat.x;
+        cone.lat = lonlat.y;
+        cone.alt = height;
         if (session.active) {
-          trajectory.push_back(latlonheight);
+          trajectory.push_back(lonlat);
         }
       }
     }
