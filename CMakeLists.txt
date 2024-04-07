@@ -4,7 +4,7 @@ project(ACR)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-add_compile_options(-Wall -Wextra -Wpedantic)
+add_compile_options(-O -g -Wall -Wextra -Wpedantic)
 
 find_library(pigpio_LIBRARY 
 	NAMES libpigpio.so

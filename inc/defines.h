@@ -1,7 +1,6 @@
 #ifndef DEFINES_H
 #define DEFINES_H
 
-
 #define P_LED_GN (5)
 #define P_LED_RD (6)
 

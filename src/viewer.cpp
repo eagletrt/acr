@@ -1,12 +1,15 @@
 #include "viewer.hpp"
-#include "raylib/src/raylib.h"
+
+#include <string.h>
+
 #include <atomic>
 #include <cstdlib>
 #include <filesystem>
 #include <mutex>
-#include <string.h>
 #include <thread>
 #include <vector>
+
+#include "raylib/src/raylib.h"
 extern "C" {
 #include "acr.h"
 #include "defines.h"
@@ -16,6 +19,7 @@ extern "C" {
 
 std::mutex renderLock;
 std::atomic<bool> kill_thread;
+std::atomic<bool> save_cone;
 
 gps_serial_port gps;
 gps_parsed_data_t gps_data;
@@ -27,11 +31,25 @@ cone_session_t cone_session;
 Vector3 latlonheight;
 std::vector<Vector3> trajectory;
 std::vector<cone_t> cones;
+bool calibrated = false;
+Vector2 offset;
+
+void readGPSLoop();
 
 #define WIN_W 800
 #define WIN_H 800
 
-int main(void) {
+const double scale = 1000000000.0;
+double XX(double x) { return (x - offset.x) * scale; }
+double YY(double y) { return (y - offset.y) * scale; }
+
+int main(int argc, char **argv) {
+  if (argc != 2) {
+    printf("Error wrong number of arguments:\n");
+    printf("  %s <gps port or log file>\n", argv[0]);
+    return -1;
+  }
+  const char *port_or_file = argv[1];
   const char *basepath = getenv("HOME");
 
   memset(&session, 0, sizeof(full_session_t));
@@ -42,29 +60,37 @@ int main(void) {
   user_data.session = &session;
   user_data.cone_session = &cone_session;
 
-  const char *port = "/dev/ttyACM0";
-  if (!std::filesystem::is_character_file(port)) {
-    printf("%s does not exists\n", port);
+  int res = 0;
+  gps_interface_initialize(&gps);
+  if (std::filesystem::is_character_file(port_or_file)) {
+    char buff[255];
+    snprintf(buff, 255, "sudo chmod 777 %s", port_or_file);
+    printf("Changing permissions on serial port: %s with command: %s\n",
+           port_or_file, buff);
+    system(buff);
+    res = gps_interface_open(&gps, port_or_file, B230400);
+  } else if (std::filesystem::is_regular_file(port_or_file)) {
+    printf("Opening file\n");
+    res = gps_interface_open_file(&gps, port_or_file);
+  } else {
+    printf("%s does not exists\n", port_or_file);
     return -1;
   }
-  char buff[255];
-  snprintf(buff, 255, "sudo chmod 777 %s", port);
-  printf("Changing permissions on serial port: %s with command: %s\n", port,
-         buff);
-  system(buff);
-  gps_interface_initialize(&gps);
-  int res = gps_interface_open(&gps, "/dev/ttyACM0", B230400);
   if (res == -1) {
     printf("GPS not found");
     return -1;
   }
 
+  std::thread gpsThread(readGPSLoop);
+
   InitWindow(WIN_W, WIN_H, "ACR");
   SetTargetFPS(24);
   Camera2D camera;
-  camera.zoom = 1.0;
   camera.target.x = 0.0;
   camera.target.y = 0.0;
+  camera.zoom = 0.02;
+  camera.rotation = 0.0;
+  camera.offset = {WIN_W / 2.0, WIN_H / 2.0};
   while (!WindowShouldClose()) {
     BeginDrawing();
     ClearBackground(DARKBROWN);
@@ -78,6 +104,7 @@ int main(void) {
     DrawText("Move (arrows)", 10, 150, 20, RAYWHITE);
 
     std::unique_lock<std::mutex> lck(renderLock);
+
     if (IsKeyPressed(KEY_T)) {
       if (session.active) {
         csv_session_stop(&session);
@@ -93,36 +120,82 @@ int main(void) {
                session.session_path);
       }
     }
-    cone.id = CONE_ID_SIZE;
     if (IsKeyPressed(KEY_O)) {
       cone.id = CONE_ID_ORANGE;
-    }
-    if (IsKeyPressed(KEY_Y)) {
+      save_cone.store(true);
+    } else if (IsKeyPressed(KEY_Y)) {
       cone.id = CONE_ID_YELLOW;
-    }
-    if (IsKeyPressed(KEY_B)) {
+      save_cone.store(true);
+    } else if (IsKeyPressed(KEY_B)) {
       cone.id = CONE_ID_BLUE;
+      save_cone.store(true);
     }
-    if (cone.id != CONE_ID_SIZE) {
-      if (cone_session.active == 0) {
-        if (cone_session_setup(&cone_session, basepath) == -1) {
-          printf("Error cone session setup\n");
-        }
-        if (cone_session_start(&cone_session) == -1) {
-          printf("Error cone session start\n");
-        }
-        printf("Cone session %s started [%s]\n", cone_session.session_name,
-               cone_session.session_path);
+    if (save_cone.load() && cone_session.active == 0) {
+      if (cone_session_setup(&cone_session, basepath) == -1) {
+        printf("Error cone session setup\n");
       }
+      if (cone_session_start(&cone_session) == -1) {
+        printf("Error cone session start\n");
+      }
+      printf("Cone session %s started [%s]\n", cone_session.session_name,
+             cone_session.session_path);
     }
     if (IsKeyPressed(KEY_C)) {
-      camera.target.x = latlonheight.x;
-      camera.target.y = latlonheight.y;
+      camera.target.x = XX(latlonheight.x);
+      camera.target.y = YY(latlonheight.y);
     }
+    if (IsKeyDown(KEY_UP)) {
+      camera.target.y -= 1000;
+    }
+    if (IsKeyDown(KEY_LEFT)) {
+      camera.target.x -= 1000;
+    }
+    if (IsKeyDown(KEY_DOWN)) {
+      camera.target.y += 1000;
+    }
+    if (IsKeyDown(KEY_RIGHT)) {
+      camera.target.x += 1000;
+    }
+    float wheel = GetMouseWheelMove();
+    if (wheel != 0) {
+      const float zoomIncrement = 0.001f;
+      camera.zoom += (wheel * zoomIncrement);
+      printf("%f\n", camera.zoom);
+      if (camera.zoom < zoomIncrement)
+        camera.zoom = zoomIncrement;
+    }
+    if (IsKeyPressed(KEY_S)) {
+      printf("%f %f\n", camera.target.x, camera.target.y);
+    }
+
     BeginMode2D(camera);
+    for (size_t i = 0; i < trajectory.size(); ++i) {
+      DrawCircle(XX(trajectory[i].x), YY(trajectory[i].y), 1000, RAYWHITE);
+    }
+    for (size_t i = 0; i < cones.size(); ++i) {
+      Color c;
+      switch (cones[i].id) {
+      case CONE_ID_YELLOW:
+        c = YELLOW;
+        break;
+      case CONE_ID_ORANGE:
+        c = ORANGE;
+        break;
+      case CONE_ID_BLUE:
+        c = BLUE;
+        break;
+      default:
+        c = RAYWHITE;
+        break;
+      }
+      DrawRectangle(XX(cones[i].lat), YY(cones[i].lon), 1000, 1000, c);
+    }
+    DrawCircle(XX(latlonheight.x), YY(latlonheight.y), 1000.0, RED);
     EndMode2D();
     EndDrawing();
   }
+  kill_thread.store(true);
+  gpsThread.join();
 
   return 0;
 }
@@ -159,8 +232,10 @@ void readGPSLoop() {
     if (match.protocol == GPS_PROTOCOL_TYPE_UBX) {
       if (match.message == GPS_UBX_TYPE_NAV_HPPOSLLH) {
         std::unique_lock<std::mutex> lck(renderLock);
+        printf("New point %f %f\n", gps_data.hpposllh.lat,
+               gps_data.hpposllh.lon);
 
-        if (CONE_ENABLE_MEAN) {
+        if (CONE_ENABLE_MEAN && calibrated) {
           latlonheight.x =
               latlonheight.x * CONE_MEAN_COMPLEMENTARY +
               gps_data.hpposllh.lat * (1.0 - CONE_MEAN_COMPLEMENTARY);
@@ -176,10 +251,19 @@ void readGPSLoop() {
           latlonheight.z = gps_data.hpposllh.height;
         }
 
+        if (!calibrated && latlonheight.x != 0.0 && latlonheight.y != 0.0) {
+          offset.x = latlonheight.x;
+          offset.y = latlonheight.y;
+          calibrated = true;
+        }
+
         cone.timestamp = gps_data.hpposllh._timestamp;
         cone.lat = latlonheight.x;
         cone.lon = latlonheight.y;
         cone.alt = latlonheight.z;
+        if (session.active) {
+          trajectory.push_back(latlonheight);
+        }
       }
     }
 
@@ -187,29 +271,15 @@ void readGPSLoop() {
       gps_to_file(&session.files, &gps_data, &match);
     }
 
-    static uint64_t cone_t = 0;
-    static int request_toggled = 0;
-    if (user_data.requested_save && request_toggled == 0) {
-      user_data.requested_save = 0;
-      request_toggled = 1;
-      cone_t = get_t();
-    }
-    if (request_toggled) {
-      if (CONE_ENABLE_MEAN == 0 || get_t() - cone_t > CONE_REPRESS_US) {
-        cone_session_write(&cone_session, &cone);
-        // print to stdout
-        FILE *tmp = cone_session.file;
-        cone_session.file = stdout;
-        cone_session_write(&cone_session, &cone);
-        cone_session.file = tmp;
-
-        if (CONE_ENABLE_MEAN) {
-          // printf("")
-        } else {
-          // led_blink_once(led_gn, 100);
-        }
-        request_toggled = 0;
-      }
+    if (save_cone) {
+      save_cone.store(false);
+      cone_session_write(&cone_session, &cone);
+      // print to stdout
+      FILE *tmp = cone_session.file;
+      cone_session.file = stdout;
+      cone_session_write(&cone_session, &cone);
+      cone_session.file = tmp;
+      cones.push_back(cone);
     }
   }
 }

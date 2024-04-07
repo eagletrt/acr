@@ -1,4 +1,5 @@
 #include "acr.h"
+
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,30 +7,30 @@
 
 const char *error_to_string(acr_error_t error) {
   switch (error) {
-  case ERROR_GPIO_INIT:
-    return "ERROR_GPIO_INIT";
-    break;
-  case ERROR_GPS_NOT_FOUND:
-    return "ERROR_GPS_NOT_FOUND";
-    break;
-  case ERROR_GPS_READ:
-    return "ERROR_GPS_READ";
-    break;
-  case ERROR_CONE_SESSION_SETUP:
-    return "ERROR_CONE_SESSION_SETUP";
-    break;
-  case ERROR_CONE_SESSION_START:
-    return "ERROR_CONE_SESSION_START";
-    break;
-  case ERROR_FULL_SESSION_SETUP:
-    return "ERROR_FULL_SESSION_SETUP";
-    break;
-  case ERROR_FULL_SESSION_START:
-    return "ERROR_FULL_SESSION_START";
-    break;
-  default:
-    return "ERROR_UNKNOWN";
-    break;
+    case ERROR_GPIO_INIT:
+      return "ERROR_GPIO_INIT";
+      break;
+    case ERROR_GPS_NOT_FOUND:
+      return "ERROR_GPS_NOT_FOUND";
+      break;
+    case ERROR_GPS_READ:
+      return "ERROR_GPS_READ";
+      break;
+    case ERROR_CONE_SESSION_SETUP:
+      return "ERROR_CONE_SESSION_SETUP";
+      break;
+    case ERROR_CONE_SESSION_START:
+      return "ERROR_CONE_SESSION_START";
+      break;
+    case ERROR_FULL_SESSION_SETUP:
+      return "ERROR_FULL_SESSION_SETUP";
+      break;
+    case ERROR_FULL_SESSION_START:
+      return "ERROR_FULL_SESSION_START";
+      break;
+    default:
+      return "ERROR_UNKNOWN";
+      break;
   }
 }
 
@@ -77,7 +78,7 @@ int cone_session_setup(cone_session_t *session, const char *basepath) {
 
   int session_count = dir_next_number(session->session_path, "cones_");
 
-  snprintf(session->session_name, 1025, "cones_%03d", session_count + 1);
+  snprintf(session->session_name, 1024, "cones_%03d", session_count + 1);
   strcat(session->session_path, session->session_name);
 
   return 0;
@@ -118,7 +119,7 @@ int csv_session_setup(full_session_t *session, const char *basepath) {
 
   int session_count = dir_next_number(session->session_path, "trajectory_");
 
-  snprintf(session->session_name, 1025, "trajectory_%03d", session_count + 1);
+  snprintf(session->session_name, 1024, "trajectory_%03d", session_count + 1);
   strcat(session->session_path, session->session_name);
 
   return 0;
@@ -156,17 +157,17 @@ void cone_session_write(cone_session_t *session, cone_t *cone) {
 
 const char *cone_id_to_string(cone_id id) {
   switch (id) {
-  case CONE_ID_YELLOW:
-    return "YELLOW";
-    break;
-  case CONE_ID_BLUE:
-    return "BLUE";
-    break;
-  case CONE_ID_ORANGE:
-    return "ORANGE";
-    break;
-  default:
-    return "UNKNOWN_CONE";
-    break;
+    case CONE_ID_YELLOW:
+      return "YELLOW";
+      break;
+    case CONE_ID_BLUE:
+      return "BLUE";
+      break;
+    case CONE_ID_ORANGE:
+      return "ORANGE";
+      break;
+    default:
+      return "UNKNOWN_CONE";
+      break;
   }
 }
