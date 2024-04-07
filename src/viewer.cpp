@@ -42,32 +42,17 @@ std::vector<cone_t> cones;
 
 ImVec2 povoBoundTL{11.1484815430000008, 46.0658863580000002};
 ImVec2 povoBoundBR{11.1515535430000003, 46.0689583580000033};
-ImVec2 vadenaBoundTL{46.4300119620000018, 11.3097566090000008};
-ImVec2 vadenaBoundBR{46.4382039620000029, 11.3169246090000009};
+ImVec2 vadenaBoundTL{11.3097566090000008, 46.4300119620000018};
+ImVec2 vadenaBoundBR{11.3169246090000009, 46.4382039620000029};
 void readGPSLoop();
 
 #define WIN_W 800
 #define WIN_H 800
 
-ImTextureID loadImagePNG(const char *path) {
-  int width, height;
-  unsigned char *data = stbi_load(path, &width, &height, 0, 4);
-  if (data == NULL) {
-    printf("Error loading image: %s\n", path);
-    return 0;
-  }
-  GLuint tex;
-  glGenTextures(1, &tex);
-  glBindTexture(GL_TEXTURE_2D, tex);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
-               GL_UNSIGNED_BYTE, data);
-  stbi_image_free(data);
-  return (ImTextureID)(intptr_t)tex;
-}
+ImTextureID loadImagePNG(const char *path);
+GLFWwindow *setupImGui();
+void startFrame();
+void endFrame(GLFWwindow *window);
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -77,6 +62,11 @@ int main(int argc, char **argv) {
   }
   const char *port_or_file = argv[1];
   const char *basepath = getenv("HOME");
+
+  GLFWwindow *window = setupImGui();
+  if (window == nullptr) {
+    return -1;
+  }
 
   memset(&session, 0, sizeof(full_session_t));
   memset(&cone_session, 0, sizeof(cone_session_t));
@@ -107,48 +97,34 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  if (!glfwInit()) return 1;
-
-  // Create window with graphics context
-  GLFWwindow *window = glfwCreateWindow(
-      1280, 720, "Dear ImGui GLFW+OpenGL2 example", nullptr, nullptr);
-  if (window == nullptr) return 1;
-  glfwMakeContextCurrent(window);
-  glfwSwapInterval(1);  // Enable vsync
-  ImGui::CreateContext();
-  ImPlot::CreateContext();
-  ImGuiIO &io = ImGui::GetIO();
-  (void)io;
-  io.ConfigFlags |=
-      ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-  ImGui::StyleColorsDark();
-  ImGui_ImplGlfw_InitForOpenGL(window, true);
-  ImGui_ImplOpenGL2_Init();
-
   ImTextureID povoTex = loadImagePNG("assets/povo.png");
   ImTextureID vadenaTex = loadImagePNG("assets/vadena.png");
   std::thread gpsThread(readGPSLoop);
-  ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-  while (!glfwWindowShouldClose(window)) {
-    glfwPollEvents();
 
-    // Start the Dear ImGui frame
-    ImGui_ImplOpenGL2_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
+  int mapIndex = 0;
+  float mapOpacity = 0.5f;
+  while (!glfwWindowShouldClose(window)) {
+    startFrame();
 
     ImGui::Begin("ACR");
-    ImGui::Text("Quit (ESC)");
-    ImGui::Text("Trajectory (T)");
-    ImGui::Text("Cones: ");
-    ImGui::Text("- Orange (O)");
-    ImGui::Text("- Yellow (Y)");
-    ImGui::Text("- Blue (B)");
-    ImGui::Text("Center (C)");
-    ImGui::Text("Move (arrows)");
+
+    if (ImGui::TreeNode("Help")) {
+      ImGui::Text("Quit (Q)");
+      ImGui::Text("Trajectory (T)");
+      ImGui::Text("Cones: ");
+      ImGui::Text("- Orange (O)");
+      ImGui::Text("- Yellow (Y)");
+      ImGui::Text("- Blue (B)");
+      ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Settings")) {
+      ImGui::SliderFloat("Map Opacity", &mapOpacity, 0.0f, 1.0f);
+      ImGui::RadioButton("Povo", &mapIndex, 0);
+      ImGui::RadioButton("Vadena", &mapIndex, 1);
+      ImGui::TreePop();
+    }
 
     std::unique_lock<std::mutex> lck(renderLock);
-
     if (ImGui::IsKeyPressed(ImGuiKey_T)) {
       if (session.active) {
         csv_session_stop(&session);
@@ -174,6 +150,9 @@ int main(int argc, char **argv) {
       cone.id = CONE_ID_BLUE;
       save_cone.store(true);
     }
+    if (ImGui::IsKeyPressed(ImGuiKey_Q)) {
+      glfwSetWindowShouldClose(window, true);
+    }
     if (save_cone.load() && cone_session.active == 0) {
       if (cone_session_setup(&cone_session, basepath) == -1) {
         printf("Error cone session setup\n");
@@ -185,9 +164,17 @@ int main(int argc, char **argv) {
              cone_session.session_path);
     }
 
-    if (ImPlot::BeginPlot("GpsPositions", ImVec2(-1, 0), ImPlotFlags_Equal)) {
-      ImPlot::PlotImage("Map", povoTex, povoBoundTL, povoBoundBR, ImVec2(0, 0),
-                        ImVec2(1, 1), ImVec4(1, 1, 1, 1.0));
+    ImVec2 size = ImGui::GetContentRegionAvail();
+    if (ImPlot::BeginPlot("GpsPositions", size, ImPlotFlags_Equal)) {
+      if (mapIndex == 0) {
+        ImPlot::PlotImage("Povo", povoTex, povoBoundTL, povoBoundBR,
+                          ImVec2(0, 0), ImVec2(1, 1),
+                          ImVec4(1, 1, 1, mapOpacity));
+      } else {
+        ImPlot::PlotImage("Vadena", vadenaTex, vadenaBoundTL, vadenaBoundBR,
+                          ImVec2(0, 0), ImVec2(1, 1),
+                          ImVec4(1, 1, 1, mapOpacity));
+      }
 
       ImPlot::PlotScatter("Trajectory", &trajectory[0].x, &trajectory[0].y,
                           trajectory.size(), 0, 0, sizeof(ImVec2));
@@ -216,26 +203,7 @@ int main(int argc, char **argv) {
     }
     ImGui::End();
 
-    ImGui::Render();
-    int display_w, display_h;
-    glfwGetFramebufferSize(window, &display_w, &display_h);
-    glViewport(0, 0, display_w, display_h);
-    glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w,
-                 clear_color.z * clear_color.w, clear_color.w);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    // If you are using this code with non-legacy OpenGL header/contexts (which
-    // you should not, prefer using imgui_impl_opengl3.cpp!!), you may need to
-    // backup/reset/restore other state, e.g. for current shader using the
-    // commented lines below.
-    // GLint last_program;
-    // glGetIntegerv(GL_CURRENT_PROGRAM, &last_program);
-    // glUseProgram(0);
-    ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
-    // glUseProgram(last_program);
-
-    glfwMakeContextCurrent(window);
-    glfwSwapBuffers(window);
+    endFrame(window);
   }
   kill_thread.store(true);
   gpsThread.join();
@@ -315,4 +283,75 @@ void readGPSLoop() {
       cones.push_back(cone);
     }
   }
+}
+
+ImTextureID loadImagePNG(const char *path) {
+  int width, height;
+  unsigned char *data = stbi_load(path, &width, &height, 0, 4);
+  if (data == NULL) {
+    printf("Error loading image: %s\n", path);
+    return 0;
+  }
+  GLuint tex;
+  glGenTextures(1, &tex);
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, data);
+  stbi_image_free(data);
+  return (ImTextureID)(intptr_t)tex;
+}
+
+GLFWwindow *setupImGui() {
+  if (!glfwInit()) return nullptr;
+
+  // Create window with graphics context
+  GLFWwindow *window = glfwCreateWindow(1280, 720, "ACR", nullptr, nullptr);
+  if (window == nullptr) return nullptr;
+  glfwMakeContextCurrent(window);
+  glfwSwapInterval(1);  // Enable vsync
+  ImGui::CreateContext();
+  ImPlot::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  (void)io;
+  io.ConfigFlags |=
+      ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+  ImGui::StyleColorsDark();
+  ImGui_ImplGlfw_InitForOpenGL(window, true);
+  ImGui_ImplOpenGL2_Init();
+  return window;
+}
+void startFrame() {
+  glfwPollEvents();
+
+  // Start the Dear ImGui frame
+  ImGui_ImplOpenGL2_NewFrame();
+  ImGui_ImplGlfw_NewFrame();
+  ImGui::NewFrame();
+}
+void endFrame(GLFWwindow *window) {
+  ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+  ImGui::Render();
+  int display_w, display_h;
+  glfwGetFramebufferSize(window, &display_w, &display_h);
+  glViewport(0, 0, display_w, display_h);
+  glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w,
+               clear_color.z * clear_color.w, clear_color.w);
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  // If you are using this code with non-legacy OpenGL header/contexts (which
+  // you should not, prefer using imgui_impl_opengl3.cpp!!), you may need to
+  // backup/reset/restore other state, e.g. for current shader using the
+  // commented lines below.
+  // GLint last_program;
+  // glGetIntegerv(GL_CURRENT_PROGRAM, &last_program);
+  // glUseProgram(0);
+  ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+  // glUseProgram(last_program);
+
+  glfwMakeContextCurrent(window);
+  glfwSwapBuffers(window);
 }
