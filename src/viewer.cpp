@@ -18,7 +18,8 @@
 #include "implot.h"
 #include "stb_image.h"
 
-extern "C" {
+extern "C"
+{
 #include "acr.h"
 #include "defines.h"
 #include "main.h"
@@ -54,8 +55,10 @@ GLFWwindow *setupImGui();
 void startFrame();
 void endFrame(GLFWwindow *window);
 
-int main(int argc, char **argv) {
-  if (argc != 2) {
+int main(int argc, char **argv)
+{
+  if (argc != 2)
+  {
     printf("Error wrong number of arguments:\n");
     printf("  %s <gps port or log file>\n", argv[0]);
     return -1;
@@ -64,7 +67,8 @@ int main(int argc, char **argv) {
   const char *basepath = getenv("HOME");
 
   GLFWwindow *window = setupImGui();
-  if (window == nullptr) {
+  if (window == nullptr)
+  {
     return -1;
   }
 
@@ -78,21 +82,27 @@ int main(int argc, char **argv) {
 
   int res = 0;
   gps_interface_initialize(&gps);
-  if (std::filesystem::is_character_file(port_or_file)) {
+  if (std::filesystem::is_character_file(port_or_file))
+  {
     char buff[255];
     snprintf(buff, 255, "sudo chmod 777 %s", port_or_file);
     printf("Changing permissions on serial port: %s with command: %s\n",
            port_or_file, buff);
     system(buff);
     res = gps_interface_open(&gps, port_or_file, B230400);
-  } else if (std::filesystem::is_regular_file(port_or_file)) {
+  }
+  else if (std::filesystem::is_regular_file(port_or_file))
+  {
     printf("Opening file\n");
     res = gps_interface_open_file(&gps, port_or_file);
-  } else {
+  }
+  else
+  {
     printf("%s does not exists\n", port_or_file);
     return -1;
   }
-  if (res == -1) {
+  if (res == -1)
+  {
     printf("GPS not found");
     return -1;
   }
@@ -103,12 +113,14 @@ int main(int argc, char **argv) {
 
   int mapIndex = 0;
   float mapOpacity = 0.5f;
-  while (!glfwWindowShouldClose(window)) {
+  while (!glfwWindowShouldClose(window))
+  {
     startFrame();
 
     ImGui::Begin("ACR");
 
-    if (ImGui::TreeNode("Help")) {
+    if (ImGui::TreeNode("Help"))
+    {
       ImGui::Text("Quit (Q)");
       ImGui::Text("Trajectory (T)");
       ImGui::Text("Cones: ");
@@ -117,7 +129,8 @@ int main(int argc, char **argv) {
       ImGui::Text("- Blue (B)");
       ImGui::TreePop();
     }
-    if (ImGui::TreeNode("Settings")) {
+    if (ImGui::TreeNode("Settings"))
+    {
       ImGui::SliderFloat("Map Opacity", &mapOpacity, 0.0f, 1.0f);
       ImGui::RadioButton("Povo", &mapIndex, 0);
       ImGui::RadioButton("Vadena", &mapIndex, 1);
@@ -125,39 +138,59 @@ int main(int argc, char **argv) {
     }
 
     std::unique_lock<std::mutex> lck(renderLock);
-    if (ImGui::IsKeyPressed(ImGuiKey_T)) {
-      if (session.active) {
+    if (ImGui::IsKeyPressed(ImGuiKey_T))
+    {
+      if (session.active)
+      {
         csv_session_stop(&session);
         printf("Session %s ended\n", session.session_name);
-      } else {
-        if (csv_session_setup(&session, basepath) == -1) {
+      }
+      else
+      {
+        if (csv_session_setup(&session, basepath) == -1)
+        {
           printf("Error session setup\n");
         }
-        if (csv_session_start(&session) == -1) {
+        if (csv_session_start(&session) == -1)
+        {
           printf("Error session start\n");
         }
         printf("Session %s started [%s]\n", session.session_name,
                session.session_path);
       }
     }
-    if (ImGui::IsKeyPressed(ImGuiKey_O)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_O))
+    {
       cone.id = CONE_ID_ORANGE;
       save_cone.store(true);
-    } else if (ImGui::IsKeyPressed(ImGuiKey_Y)) {
+    }
+    else if (ImGui::IsKeyPressed(ImGuiKey_Y))
+    {
       cone.id = CONE_ID_YELLOW;
       save_cone.store(true);
-    } else if (ImGui::IsKeyPressed(ImGuiKey_B)) {
+    }
+    else if (ImGui::IsKeyPressed(ImGuiKey_B))
+    {
       cone.id = CONE_ID_BLUE;
       save_cone.store(true);
     }
-    if (ImGui::IsKeyPressed(ImGuiKey_Q)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_Q))
+    {
       glfwSetWindowShouldClose(window, true);
     }
-    if (save_cone.load() && cone_session.active == 0) {
-      if (cone_session_setup(&cone_session, basepath) == -1) {
+    if (ImGui::IsKeyPressed(ImGuiKey_C))
+    {
+      trajectory.clear();
+      cones.clear();
+    }
+    if (save_cone.load() && cone_session.active == 0)
+    {
+      if (cone_session_setup(&cone_session, basepath) == -1)
+      {
         printf("Error cone session setup\n");
       }
-      if (cone_session_start(&cone_session) == -1) {
+      if (cone_session_start(&cone_session) == -1)
+      {
         printf("Error cone session start\n");
       }
       printf("Cone session %s started [%s]\n", cone_session.session_name,
@@ -165,12 +198,16 @@ int main(int argc, char **argv) {
     }
 
     ImVec2 size = ImGui::GetContentRegionAvail();
-    if (ImPlot::BeginPlot("GpsPositions", size, ImPlotFlags_Equal)) {
-      if (mapIndex == 0) {
+    if (ImPlot::BeginPlot("GpsPositions", size, ImPlotFlags_Equal))
+    {
+      if (mapIndex == 0)
+      {
         ImPlot::PlotImage("Povo", povoTex, povoBoundTL, povoBoundBR,
                           ImVec2(0, 0), ImVec2(1, 1),
                           ImVec4(1, 1, 1, mapOpacity));
-      } else {
+      }
+      else
+      {
         ImPlot::PlotImage("Vadena", vadenaTex, vadenaBoundTL, vadenaBoundBR,
                           ImVec2(0, 0), ImVec2(1, 1),
                           ImVec4(1, 1, 1, mapOpacity));
@@ -179,21 +216,23 @@ int main(int argc, char **argv) {
       ImPlot::PlotScatter("Trajectory", &trajectory[0].x, &trajectory[0].y,
                           trajectory.size(), 0, 0, sizeof(ImVec2));
 
-      for (size_t i = 0; i < cones.size(); ++i) {
+      for (size_t i = 0; i < cones.size(); ++i)
+      {
         ImVec4 c;
-        switch (cones[i].id) {
-          case CONE_ID_YELLOW:
-            c = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
-            break;
-          case CONE_ID_ORANGE:
-            c = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
-            break;
-          case CONE_ID_BLUE:
-            c = ImVec4(0.0f, 0.0f, 1.0f, 1.0f);
-            break;
-          default:
-            c = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-            break;
+        switch (cones[i].id)
+        {
+        case CONE_ID_YELLOW:
+          c = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+          break;
+        case CONE_ID_ORANGE:
+          c = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
+          break;
+        case CONE_ID_BLUE:
+          c = ImVec4(0.0f, 0.0f, 1.0f, 1.0f);
+          break;
+        default:
+          c = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+          break;
         }
         ImPlot::SetNextMarkerStyle(ImPlotMarker_Up, 8, c, 0.0);
         ImPlot::PlotScatter("Cones", &cones[i].lon, &cones[i].lat, 1);
@@ -211,48 +250,60 @@ int main(int argc, char **argv) {
   return 0;
 }
 
-void readGPSLoop() {
+void readGPSLoop()
+{
   int fail_count = 0;
   int res = 0;
   unsigned char start_sequence[GPS_MAX_START_SEQUENCE_SIZE];
   char line[GPS_MAX_LINE_SIZE];
-  while (!kill_thread) {
+  while (!kill_thread)
+  {
     int start_size, line_size;
     gps_protocol_type protocol;
     protocol = gps_interface_get_line(&gps, start_sequence, &start_size, line,
                                       &line_size, true);
-    if (protocol == GPS_PROTOCOL_TYPE_SIZE) {
+    if (protocol == GPS_PROTOCOL_TYPE_SIZE)
+    {
       fail_count++;
-      if (fail_count > 10) {
+      if (fail_count > 10)
+      {
         printf("Error gps disconnected\n");
         return;
       }
       continue;
-    } else {
+    }
+    else
+    {
       fail_count = 0;
     }
 
     gps_protocol_and_message match;
     res = gps_match_message(&match, line, protocol);
-    if (res == -1) {
+    if (res == -1)
+    {
       continue;
     }
 
     gps_parse_buffer(&gps_data, &match, line, get_t());
 
-    if (match.protocol == GPS_PROTOCOL_TYPE_UBX) {
-      if (match.message == GPS_UBX_TYPE_NAV_HPPOSLLH) {
+    if (match.protocol == GPS_PROTOCOL_TYPE_UBX)
+    {
+      if (match.message == GPS_UBX_TYPE_NAV_HPPOSLLH)
+      {
         std::unique_lock<std::mutex> lck(renderLock);
         static double height = 0.0;
 
-        if (CONE_ENABLE_MEAN && lonlat.x != 0.0 && lonlat.y != 0.0) {
+        if (CONE_ENABLE_MEAN && lonlat.x != 0.0 && lonlat.y != 0.0)
+        {
           lonlat.x = lonlat.x * CONE_MEAN_COMPLEMENTARY +
                      gps_data.hpposllh.lon * (1.0 - CONE_MEAN_COMPLEMENTARY);
           lonlat.y = lonlat.y * CONE_MEAN_COMPLEMENTARY +
                      gps_data.hpposllh.lat * (1.0 - CONE_MEAN_COMPLEMENTARY);
           height = height * CONE_MEAN_COMPLEMENTARY +
                    gps_data.hpposllh.height * (1.0 - CONE_MEAN_COMPLEMENTARY);
-        } else {
+        }
+        else
+        {
           lonlat.x = gps_data.hpposllh.lon;
           lonlat.y = gps_data.hpposllh.lat;
           height = gps_data.hpposllh.height;
@@ -262,17 +313,24 @@ void readGPSLoop() {
         cone.lon = lonlat.x;
         cone.lat = lonlat.y;
         cone.alt = height;
-        if (session.active) {
+
+        static int count = 0;
+        if (session.active && count % 10 == 0)
+        {
           trajectory.push_back(lonlat);
+          count = 0;
         }
+        count++;
       }
     }
 
-    if (session.active) {
+    if (session.active)
+    {
       gps_to_file(&session.files, &gps_data, &match);
     }
 
-    if (save_cone) {
+    if (save_cone)
+    {
       save_cone.store(false);
       cone_session_write(&cone_session, &cone);
       // print to stdout
@@ -285,10 +343,12 @@ void readGPSLoop() {
   }
 }
 
-ImTextureID loadImagePNG(const char *path) {
+ImTextureID loadImagePNG(const char *path)
+{
   int width, height;
   unsigned char *data = stbi_load(path, &width, &height, 0, 4);
-  if (data == NULL) {
+  if (data == NULL)
+  {
     printf("Error loading image: %s\n", path);
     return 0;
   }
@@ -305,26 +365,30 @@ ImTextureID loadImagePNG(const char *path) {
   return (ImTextureID)(intptr_t)tex;
 }
 
-GLFWwindow *setupImGui() {
-  if (!glfwInit()) return nullptr;
+GLFWwindow *setupImGui()
+{
+  if (!glfwInit())
+    return nullptr;
 
   // Create window with graphics context
   GLFWwindow *window = glfwCreateWindow(1280, 720, "ACR", nullptr, nullptr);
-  if (window == nullptr) return nullptr;
+  if (window == nullptr)
+    return nullptr;
   glfwMakeContextCurrent(window);
-  glfwSwapInterval(1);  // Enable vsync
+  glfwSwapInterval(1); // Enable vsync
   ImGui::CreateContext();
   ImPlot::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   (void)io;
   io.ConfigFlags |=
-      ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+      ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   ImGui::StyleColorsDark();
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL2_Init();
   return window;
 }
-void startFrame() {
+void startFrame()
+{
   glfwPollEvents();
 
   // Start the Dear ImGui frame
@@ -332,7 +396,8 @@ void startFrame() {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 }
-void endFrame(GLFWwindow *window) {
+void endFrame(GLFWwindow *window)
+{
   ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
   ImGui::Render();
   int display_w, display_h;
