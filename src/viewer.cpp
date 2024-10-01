@@ -40,16 +40,23 @@ ImVec2 lonlat;
 std::vector<ImVec2> trajectory;
 std::vector<cone_t> cones;
 
-ImVec2 povoBoundTL{11.1484815430000008, 46.0658863580000002};
-ImVec2 povoBoundBR{11.1515535430000003, 46.0689583580000033};
-ImVec2 vadenaBoundTL{11.3097566090000008, 46.4300119620000018};
-ImVec2 vadenaBoundBR{11.3169246090000009, 46.4382039620000029};
+ImVec2 povoBoundBL{11.1484815430000008, 46.0658863580000002};
+ImVec2 povoBoundTR{11.1515535430000003, 46.0689583580000033};
+ImVec2 vadenaBoundBL{11.3097566090000008, 46.4300119620000018};
+ImVec2 vadenaBoundTR{11.3169246090000009, 46.4382039620000029};
+ImVec2 fsgBoundBL{8.558931763076039, 49.32344089057215};
+ImVec2 fsgBoundTR{8.595726757113576, 49.335430701657735};
+ImVec2 alaBoundBL{11.010747212958533, 45.784567764275764};
+ImVec2 alaBoundTR{11.013506837511347, 45.78713363420464};
+ImVec2 varanoBoundBL{10.013347232876077, 44.67756187921092};
+ImVec2 varanoBoundTR{10.031744729894845, 44.684102509035036};
+
 void readGPSLoop();
 
 #define WIN_W 800
 #define WIN_H 800
 
-ImTextureID loadImagePNG(const char *path);
+ImTextureID loadImageJPG(const char *path);
 GLFWwindow *setupImGui();
 void startFrame();
 void endFrame(GLFWwindow *window);
@@ -97,8 +104,8 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  ImTextureID povoTex = loadImagePNG("assets/povo.png");
-  ImTextureID vadenaTex = loadImagePNG("assets/vadena.png");
+  ImTextureID povoTex = loadImageJPG("assets/Povo.jpg");
+  ImTextureID vadenaTex = loadImageJPG("assets/Vadena.jpg");
   std::thread gpsThread(readGPSLoop);
 
   int mapIndex = 0;
@@ -171,13 +178,17 @@ int main(int argc, char **argv) {
     }
 
     ImVec2 size = ImGui::GetContentRegionAvail();
-    if (ImPlot::BeginPlot("GpsPositions", size, ImPlotFlags_Equal)) {
-      if (mapIndex == 0) {
-        ImPlot::PlotImage("Povo", povoTex, povoBoundTL, povoBoundBR,
+    if (ImPlot::BeginPlot("GpsPositions", size, ImPlotFlags_Equal))
+    {
+      if (mapIndex == 0)
+      {
+        ImPlot::PlotImage("Povo", povoTex, povoBoundBL, povoBoundTR,
                           ImVec2(0, 0), ImVec2(1, 1),
                           ImVec4(1, 1, 1, mapOpacity));
-      } else {
-        ImPlot::PlotImage("Vadena", vadenaTex, vadenaBoundTL, vadenaBoundBR,
+      }
+      else
+      {
+        ImPlot::PlotImage("Vadena", vadenaTex, vadenaBoundBL, vadenaBoundTR,
                           ImVec2(0, 0), ImVec2(1, 1),
                           ImVec4(1, 1, 1, mapOpacity));
       }
@@ -295,7 +306,8 @@ void readGPSLoop() {
   }
 }
 
-ImTextureID loadImagePNG(const char *path) {
+ImTextureID loadImageJPG(const char *path)
+{
   int width, height;
   unsigned char *data = stbi_load(path, &width, &height, 0, 4);
   if (data == NULL) {
