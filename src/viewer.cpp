@@ -331,7 +331,7 @@ GLFWwindow *setupImGui() {
     ImGui_ImplOpenGL2_Init();
 
     // Load fonts from the 'fonts' directory
-    loadFontsFromDirectory(io, "../assets/fonts");
+    loadFontsFromDirectory(io, "../assets/fonts/");
 
     // Set the default font
     if (!availableFonts.empty()) {
@@ -706,8 +706,6 @@ int findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cone
     return closestIndex;  // Return the index of the closest cone, or -1 if none is close enough
 }
 
-// ----------------------- Main Function -----------------------
-
 int main(int argc, char **argv) {
     const char *port_or_file = nullptr;
     if (argc == 2) {
@@ -819,11 +817,6 @@ int main(int argc, char **argv) {
         processNotifications(deltaTime);
 
         ImGui::Begin("ACR");
-
-        // File Browser Popup
-        if (showFileBrowser) {
-            renderFileBrowser();
-        }
 
         // Button to open the file browser
         if (ImGui::Button("Load Log File")) {
