@@ -270,7 +270,7 @@ void setCustomTheme() {
     style.ItemSpacing       = ImVec2(10.0f, 10.0f);
     style.IndentSpacing     = 20.0f;
     style.ScrollbarSize     = 15.0f;
-    style.WindowPadding     = ImVec2(10.0f, 10.0f);
+    style.WindowPadding     = ImVec2(0.0f, 0.0f); // Removed padding for fullscreen
 }
 
 // Function to load icons
@@ -310,8 +310,8 @@ GLFWwindow *setupImGui() {
     if (!glfwInit())
         return nullptr;
 
-    // Create window with graphics context
-    GLFWwindow *window = glfwCreateWindow(1280, 720, "ACR", nullptr, nullptr);
+    // Create fullscreen window by passing the primary monitor
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "ACR", nullptr, nullptr);
     if (window == nullptr)
         return nullptr;
     glfwMakeContextCurrent(window);
@@ -413,7 +413,6 @@ void processNotifications(float deltaTime) {
             it = activeNotifications.erase(it);
             continue;
         }
-
         // Calculate transparency for fade-in and fade-out effect
         float alpha = 0.8f;
         float fadeInTime = 0.5f;
@@ -472,10 +471,9 @@ void processNotifications(float deltaTime) {
         ImGui::SetNextWindowSize(ImVec2(notificationWidth, notificationHeight));
 
         // Define window flags
-        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                                        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-                                        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-                                        ImGuiWindowFlags_NoInputs;
+        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground;
 
         // Unique window name
         std::string windowName = "Notification_" + it->source + "_" + std::to_string(notificationIndex);
@@ -816,7 +814,28 @@ int main(int argc, char **argv) {
         // Process active notifications
         processNotifications(deltaTime);
 
-        ImGui::Begin("ACR");
+        // Retrieve the main viewport
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImVec2 viewportPos = viewport->Pos;
+        ImVec2 viewportSize = viewport->Size;
+
+        // Set the next window position and size to cover the entire viewport
+        ImGui::SetNextWindowPos(viewportPos);
+        ImGui::SetNextWindowSize(viewportSize);
+
+        // Define window flags to remove decorations and disable interactions
+        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground;
+
+        // Begin the full-screen "ACR" window
+        ImGui::Begin("ACR", nullptr, window_flags);
+
+        // Optional: Remove padding to make contents stretch fully
+        // Already set globally in setCustomTheme(), but can ensure here if needed
+        // ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
+        // ----------------------- Your Existing ImGui Content -----------------------
 
         // Button to open the file browser
         if (ImGui::Button("Load Log File")) {
@@ -890,77 +909,76 @@ int main(int argc, char **argv) {
         }
 
         // Settings Section using Tabs
-if (ImGui::BeginTabBar("MainTabBar")) {
-    if (ImGui::BeginTabItem("Help")) {
-        ImGui::Text("Quit (Q)");
-        ImGui::Text("Toggle Trajectory Recording (T)");
-        ImGui::Text("Cones: ");
-        ImGui::Text("- Orange (O)");
-        ImGui::Text("- Yellow (Y)");
-        ImGui::Text("- Blue (B)");
-        ImGui::EndTabItem();
-    }
-
-    if (ImGui::BeginTabItem("Settings")) {
-        // Map Opacity Slider with Tooltip
-        ImGui::BeginGroup();
-        ImGui::Text("Map Opacity");
-        ImGui::SameLine();
-        ImGui::SliderFloat("##MapOpacity", &mapOpacity, 0.0f, 1.0f);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Adjust the opacity of the map overlay.");
-        ImGui::EndGroup();
-
-        // Map Selection Radio Buttons with Tooltip
-        ImGui::Text("Select Map:");
-        for (int i = 0; i < static_cast<int>(maps.size()); i++) {
-            if (ImGui::RadioButton(maps[i].name.c_str(), &selectedMapIndex, i)) {
-                // Show a confirmation popup when a map is selected
-                showPopup("Map", "Map Selected", "You have selected the map: " + maps[i].name, NotificationType::Success);
-                printf("Selected map: %s\n", maps[i].name.c_str());
+        if (ImGui::BeginTabBar("MainTabBar")) {
+            if (ImGui::BeginTabItem("Help")) {
+                ImGui::Text("Quit (Q)");
+                ImGui::Text("Toggle Trajectory Recording (T)");
+                ImGui::Text("Cones: ");
+                ImGui::Text("- Orange (O)");
+                ImGui::Text("- Yellow (Y)");
+                ImGui::Text("- Blue (B)");
+                ImGui::EndTabItem();
             }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Select the map to display.");
-        }
 
-        // Font Selection Dropdown with Tooltip
-        if (ImGui::BeginCombo("Select Font", availableFonts[selectedFontIndex].name.c_str())) {
-            for (size_t n = 0; n < availableFonts.size(); n++) {
-                bool is_selected = (selectedFontIndex == static_cast<int>(n));
-                if (ImGui::Selectable(availableFonts[n].name.c_str(), is_selected))
-                    selectedFontIndex = static_cast<int>(n);
-                if (is_selected)
-                    ImGui::SetItemDefaultFocus();
+            if (ImGui::BeginTabItem("Settings")) {
+                // Map Opacity Slider with Tooltip
+                ImGui::BeginGroup();
+                ImGui::Text("Map Opacity");
+                ImGui::SameLine();
+                ImGui::SliderFloat("##MapOpacity", &mapOpacity, 0.0f, 1.0f);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Adjust the opacity of the map overlay.");
+                ImGui::EndGroup();
+
+                // Map Selection Radio Buttons with Tooltip
+                ImGui::Text("Select Map:");
+                for (int i = 0; i < static_cast<int>(maps.size()); i++) {
+                    if (ImGui::RadioButton(maps[i].name.c_str(), &selectedMapIndex, i)) {
+                        // Show a confirmation popup when a map is selected
+                        showPopup("Map", "Map Selected", "You have selected the map: " + maps[i].name, NotificationType::Success);
+                        printf("Selected map: %s\n", maps[i].name.c_str());
+                    }
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Select the map to display.");
+                }
+
+                // Font Selection Dropdown with Tooltip
+                if (ImGui::BeginCombo("Select Font", availableFonts[selectedFontIndex].name.c_str())) {
+                    for (size_t n = 0; n < availableFonts.size(); n++) {
+                        bool is_selected = (selectedFontIndex == static_cast<int>(n));
+                        if (ImGui::Selectable(availableFonts[n].name.c_str(), is_selected))
+                            selectedFontIndex = static_cast<int>(n);
+                        if (is_selected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Choose a font for the application.");
+
+                // Set the selected font
+                if (selectedFontIndex >= 0 && selectedFontIndex < static_cast<int>(availableFonts.size())) {
+                    ImGui::GetIO().FontDefault = availableFonts[selectedFontIndex].font;
+                }
+
+                // Slider for font scale with Tooltip
+                ImGui::BeginGroup();
+                ImGui::Text("Font Scale");
+                ImGui::SameLine();
+                ImGui::SliderFloat("##FontScale", &fontScale, 0.5f, 2.0f);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Adjust the global font scale.");
+                ImGui::EndGroup();
+
+                ImGui::Text("Font Scale: %.2f", fontScale);
+
+                // Apply global font scale
+                ImGui::GetIO().FontGlobalScale = fontScale;
+
+                ImGui::EndTabItem();
             }
-            ImGui::EndCombo();
+            ImGui::EndTabBar();
         }
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Choose a font for the application.");
-
-        // Set the selected font
-        if (selectedFontIndex >= 0 && selectedFontIndex < static_cast<int>(availableFonts.size())) {
-            ImGui::GetIO().FontDefault = availableFonts[selectedFontIndex].font;
-        }
-
-        // Slider for font scale with Tooltip
-        ImGui::BeginGroup();
-        ImGui::Text("Font Scale");
-        ImGui::SameLine();
-        ImGui::SliderFloat("##FontScale", &fontScale, 0.5f, 2.0f);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Adjust the global font scale.");
-        ImGui::EndGroup();
-
-        ImGui::Text("Font Scale: %.2f", fontScale);
-
-        // Apply global font scale
-        ImGui::GetIO().FontGlobalScale = fontScale;
-
-        ImGui::EndTabItem();
-    }
-    ImGui::EndTabBar();
-}
-
 
         ImGui::Separator();
 
@@ -1132,7 +1150,7 @@ if (ImGui::BeginTabBar("MainTabBar")) {
             switch (cones[selectedConeIndex].id) {
                 case CONE_ID_ORANGE:
                     for (const auto& icon : icons) {
-                        if (icon.name == "Success") { // Assuming "Success" icon represents orange
+                        if (icon.name == "Success") {
                             coneIcon = icon.texture;
                             break;
                         }
@@ -1140,7 +1158,7 @@ if (ImGui::BeginTabBar("MainTabBar")) {
                     break;
                 case CONE_ID_YELLOW:
                     for (const auto& icon : icons) {
-                        if (icon.name == "Info") { // Assuming "Info" icon represents yellow
+                        if (icon.name == "Info") { 
                             coneIcon = icon.texture;
                             break;
                         }
@@ -1148,7 +1166,7 @@ if (ImGui::BeginTabBar("MainTabBar")) {
                     break;
                 case CONE_ID_BLUE:
                     for (const auto& icon : icons) {
-                        if (icon.name == "Error") { // Assuming "Error" icon represents blue
+                        if (icon.name == "Error") { 
                             coneIcon = icon.texture;
                             break;
                         }
@@ -1230,7 +1248,7 @@ if (ImGui::BeginTabBar("MainTabBar")) {
             ImGui::EndPopup();
         }
 
-        ImGui::End();
+        ImGui::End(); 
 
         endFrame(window);
     }
