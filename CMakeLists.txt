@@ -87,6 +87,8 @@ add_executable(viewer
     external/imgui/backends/imgui_impl_opengl2.cpp
     external/implot/implot.cpp
     external/implot/implot_items.cpp
+    external/imgui/imgui_demo.cpp
+    external/implot/implot_demo.cpp
 )
 
 target_include_directories(viewer PRIVATE
