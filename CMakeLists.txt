@@ -5,21 +5,35 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_definitions("ImDrawIdx=unsigned int")
 
-# Gestione pigpio
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(GLFW REQUIRED glfw3)
+pkg_check_modules(GLIB REQUIRED glib-2.0)
+pkg_check_modules(GTK REQUIRED gtk+-3.0)
+
 find_library(pigpio_LIBRARY 
-    NAMES libpigpio.so
+    NAMES pigpio
     HINTS /usr/local/lib
 )
-if(${pigpio_LIBRARY} STREQUAL "pigpio_LIBRARY-NOTFOUND")
+if(NOT pigpio_LIBRARY)
     message(WARNING "pigpio not found")
     set(pigpio_LIBRARY "")
     add_compile_definitions(ACR_NO_PIGPIO)
 endif()
 
-# Aggiungi la libreria nativefiledialog-extended
+include_directories(
+    ${GLIB_INCLUDE_DIRS}
+    ${GTK_INCLUDE_DIRS}
+    ${GLFW_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_LIST_DIR}/inc
+    ${CMAKE_CURRENT_LIST_DIR}/external   
+    ${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended/src/include
+)
+
+add_definitions(${GLIB_CFLAGS_OTHER} ${GTK_CFLAGS_OTHER})
+
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended)
 
-# Aggiunta delle librerie acr e gps
 add_library(acr
     STATIC
     ${CMAKE_CURRENT_LIST_DIR}/src/acr.c
@@ -29,10 +43,12 @@ add_library(acr
 )
 target_include_directories(acr PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/inc
-    ${CMAKE_CURRENT_LIST_DIR}/external  # Aggiunto per gpslib/gps_interface.h
+    ${CMAKE_CURRENT_LIST_DIR}/external  
+    ${GLIB_INCLUDE_DIRS}
+    ${GTK_INCLUDE_DIRS}
 )
 target_compile_options(acr PRIVATE -O -g -Wall -Wextra)
-target_link_libraries(acr PUBLIC ${pigpio_LIBRARY})
+target_link_libraries(acr PUBLIC ${pigpio_LIBRARY} ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
 
 add_library(gps
     STATIC
@@ -41,35 +57,26 @@ add_library(gps
 )
 target_include_directories(gps PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/external/gpslib
+    ${GLIB_INCLUDE_DIRS}
+    ${GTK_INCLUDE_DIRS}
 )
 target_compile_options(gps PRIVATE -O -g -Wall -Wextra)
+target_link_libraries(gps PUBLIC ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
 
-# Imposta la directory di output degli eseguibili
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin)
 
-# Eseguibile principale
 add_executable(main src/main.c)
 target_include_directories(main PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/inc
+    ${GLIB_INCLUDE_DIRS}
+    ${GTK_INCLUDE_DIRS}
 )
 target_compile_options(main PRIVATE -O -g -Wall -Wextra)
-target_link_libraries(main acr gps m pthread)
+target_link_libraries(main acr gps m pthread ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
 
-# OpenGL
 find_package(OpenGL REQUIRED)
+find_library(GLX_LIBRARY GLX)
 
-# Find GLFW using pkg-config
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GLFW REQUIRED glfw3)
-
-# Optionally, you can check if GLFW was found
-if (GLFW_FOUND)
-    message(STATUS "Found GLFW: version ${GLFW_VERSION}")
-else()
-    message(FATAL_ERROR "GLFW not found")
-endif()
-
-# Eseguibile viewer
 add_executable(viewer
     src/viewer.cpp
     external/imgui/imgui.cpp
@@ -81,7 +88,7 @@ add_executable(viewer
     external/implot/implot.cpp
     external/implot/implot_items.cpp
 )
-# Specifica le include directories per il target viewer
+
 target_include_directories(viewer PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}              
     ${CMAKE_CURRENT_LIST_DIR}/inc
@@ -92,9 +99,11 @@ target_include_directories(viewer PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/external/implot
     ${GLFW_INCLUDE_DIRS}
     ${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended/src/include
+    ${GLIB_INCLUDE_DIRS}
+    ${GTK_INCLUDE_DIRS}
 )
 
 target_compile_options(viewer PRIVATE -O -g -Wall -Wextra)
+target_link_libraries(viewer acr gps m pthread OpenGL::GL glfw nfd ${GLIB_LIBRARIES} ${GTK_LIBRARIES} ${GLX_LIBRARY})
 
-target_link_libraries(viewer acr gps m pthread OpenGL::GL glfw nfd)
-find_package(OpenGL REQUIRED COMPONENTS OpenGL GLX)
+
