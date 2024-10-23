@@ -5,11 +5,11 @@
 #include "notifications.hpp"
 #include <algorithm>
 
-// Mutex per proteggere l'accesso al vettore cones
+// Mutex to protect access to the cones vector
 extern std::mutex renderLock;
 extern std::vector<cone_t> cones;
 
-// Funzione di trimming per rimuovere spazi bianchi
+// Trimming function to remove white spaces
 static inline std::string trim(const std::string& s) {
     auto start = s.begin();
     while (start != s.end() && std::isspace(*start)) {
@@ -26,12 +26,11 @@ static inline std::string trim(const std::string& s) {
     return std::string(start, end + 1);
 }
 
-// cones_loader.cpp
-
+// Function to load cones from a CSV file
 bool loadConesFromCSV(const std::string& filePath) {
     std::ifstream file(filePath);
     if (!file.is_open()) {
-        std::cerr << "Errore nell'apertura del file CSV: " << filePath << std::endl;
+        std::cerr << "Error opening CSV file: " << filePath << std::endl;
         return false;
     }
 
@@ -39,10 +38,10 @@ bool loadConesFromCSV(const std::string& filePath) {
     int lineNumber = 0;
     std::vector<cone_t> loadedCones;
 
-    // Leggi e salta la riga di intestazione
+    // Read and skip the header row
     if (std::getline(file, line)) {
         lineNumber++;
-        // Opzionalmente, puoi verificare che la riga di intestazione sia corretta
+        // Optionally, you can verify that the header row is correct
     }
 
     while (std::getline(file, line)) {
@@ -53,24 +52,23 @@ bool loadConesFromCSV(const std::string& filePath) {
         std::string token;
         std::vector<std::string> tokens;
 
-        // Utilizza ',' come delimitatore
+        // Use ',' as delimiter
         while (std::getline(ss, token, ',')) {
             tokens.push_back(trim(token));
         }
 
-        // Assicurati di avere almeno 5 campi (timestamp, cone_id, cone_name, lat, lon)
+        // Ensure at least 5 fields (timestamp, cone_id, cone_name, lat, lon)
         if (tokens.size() < 5) {
-            std::cerr << "Formato non valido nel CSV alla riga " << lineNumber << ": " << line << std::endl;
+            std::cerr << "Invalid format in CSV at line " << lineNumber << ": " << line << std::endl;
             continue;
         }
 
         cone_t cone;
         try {
-            
             cone.lat = std::stof(tokens[3]);
             cone.lon = std::stof(tokens[4]);
 
-            // Parsing cone_id e assegnazione del tipo di cono
+            // Parse cone_id and assign cone type
             int cone_id = std::stoi(tokens[1]);
             switch (cone_id) {
                 case 0:
@@ -83,27 +81,26 @@ bool loadConesFromCSV(const std::string& filePath) {
                     cone.id = CONE_ID_ORANGE;
                     break;
                 default:
-                    cone.id = CONE_ID_YELLOW; // Valore di default
+                    cone.id = CONE_ID_YELLOW; // Default value
                     break;
             }
 
-            // Parsing altitudine se disponibile
+            // Parse altitude if available
             if (tokens.size() >= 6) {
                 cone.alt = std::stof(tokens[5]);
             } else {
-                cone.alt = 0.0f; // Valore di default
+                cone.alt = 0.0f; // Default value
             }
 
-            // Parsing timestamp se necessario
+            // Parse timestamp if necessary
             try {
-                cone.timestamp = std::stoul(tokens[0]); // Usa stoul per interi più grandi
+                cone.timestamp = std::stoul(tokens[0]); // Use stoul for larger integers
             } catch (...) {
                 cone.timestamp = 0.0f;
             }
 
-        }
-        catch (const std::exception& e) {
-            std::cerr << "Errore nel parsing del CSV alla riga " << lineNumber << ": " << e.what() << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Error parsing CSV at line " << lineNumber << ": " << e.what() << std::endl;
             continue;
         }
 
@@ -114,7 +111,7 @@ bool loadConesFromCSV(const std::string& filePath) {
     file.close();
 
     if (loadedCones.empty()) {
-        std::cerr << "Nessun cono valido caricato dal CSV: " << filePath << std::endl;
+        std::cerr << "No valid cones loaded from CSV: " << filePath << std::endl;
         return false;
     }
 
@@ -126,7 +123,7 @@ bool loadConesFromCSV(const std::string& filePath) {
     return true;
 }
 
-
+// Function to clear all loaded cones
 void clearLoadedCones() {
     std::unique_lock<std::mutex> lck(renderLock);
     cones.clear();

@@ -4,49 +4,49 @@
 #include <cstdio>
 #include "notifications.hpp"
 
-// Definizione delle variabili globali
+// Definition of global variables
 std::vector<FontInfo> availableFonts;
-int selectedFontIndex = 0; // Indice della font selezionata
-float fontScale = 1.0f; // Scala iniziale della font
+int selectedFontIndex = 0; // Index of the selected font
+float fontScale = 1.0f; // Initial font scale
 
-// Funzione per caricare le font dalla directory
+// Function to load fonts from the directory
 void loadFontsFromDirectory(ImGuiIO& io, const std::string& fontsDir) {
-    // Estensioni supportate per i file di font
+    // Supported font file extensions
     std::vector<std::string> extensions = { ".ttf", ".otf" };
 
     for (const auto& entry : std::filesystem::directory_iterator(fontsDir)) {
         if (entry.is_regular_file()) {
             std::string path = entry.path().string();
             std::string ext = entry.path().extension().string();
-            // Verifica se il file ha un'estensione supportata
+            // Check if the file has a supported extension
             if (std::find(extensions.begin(), extensions.end(), ext) != extensions.end()) {
-                // Estrai il nome della font dal nome del file
+                // Extract the font name from the file name
                 std::string name = entry.path().stem().string();
-                // Carica la font con la dimensione predefinita
+                // Load the font with the default size
                 ImFont* font = io.Fonts->AddFontFromFileTTF(path.c_str(), 16.0f);
                 if (font) {
                     availableFonts.push_back(FontInfo{ name, font });
-                    printf("Font caricata: %s\n", name.c_str());
+                    printf("Font loaded: %s\n", name.c_str());
                 }
                 else {
-                    printf("Impossibile caricare la font: %s\n", path.c_str());
+                    printf("Unable to load font: %s\n", path.c_str());
                 }
             }
         }
     }
 
-    // Se nessuna font personalizzata è stata caricata, carica la font predefinita
+    // If no custom fonts were loaded, load the default font
     if (availableFonts.empty()) {
         availableFonts.push_back(FontInfo{ "Default", io.Fonts->AddFontDefault() });
-        printf("Nessuna font personalizzata trovata. Font predefinita caricata.\n");
+        printf("No custom fonts found. Default font loaded.\n");
     }
 }
 
-// Funzione per inizializzare le font
+// Function to initialize fonts
 void initializeFonts(ImGuiIO& io, const std::string& fontsDir) {
     loadFontsFromDirectory(io, fontsDir);
 
-    // Imposta la font predefinita
+    // Set the default font
     if (!availableFonts.empty()) {
         io.FontDefault = availableFonts[selectedFontIndex].font;
     }

@@ -5,18 +5,18 @@
 #include <vector>
 #include "imgui/imgui.h"
 
-// Struttura per le informazioni sulla font
+// Structure for font information
 struct FontInfo {
     std::string name;
     ImFont* font;
 };
 
-// Dichiarazione delle variabili esterne
+// External variable declarations
 extern std::vector<FontInfo> availableFonts;
-extern int selectedFontIndex; // Indice della font selezionata
+extern int selectedFontIndex; // Index of the selected font
 extern float fontScale; 
 
-// Dichiarazione delle funzioni
+// Function declarations
 void loadFontsFromDirectory(ImGuiIO& io, const std::string& fontsDir);
 void initializeFonts(ImGuiIO& io, const std::string& fontsDir);
 

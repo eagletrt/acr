@@ -30,7 +30,7 @@ ImTextureID loadImagePNG(const char* path) {
 
 // Function to load icons
 void loadIcons() {
-    ImTextureID infoIcon = loadImagePNG("../assets/icons/info.png"); // Ensure the path is correct
+    ImTextureID infoIcon = loadImagePNG("../assets/icons/info.png");
     if (infoIcon != 0) {
         icons.push_back({ "Info", infoIcon, ImVec2(16, 16) });
         printf("Loaded icon: Info\n");
@@ -38,7 +38,7 @@ void loadIcons() {
         printf("Failed to load icon: info.png\n");
     }
 
-    ImTextureID successIcon = loadImagePNG("../assets/icons/success.png"); // Ensure the path is correct
+    ImTextureID successIcon = loadImagePNG("../assets/icons/success.png");
     if (successIcon != 0) {
         icons.push_back({ "Success", successIcon, ImVec2(16, 16) });
         printf("Loaded icon: Success\n");

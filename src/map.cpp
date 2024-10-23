@@ -11,7 +11,6 @@ extern "C" {
     #include "acr.h"
 }
 
-// Define external variables
 std::vector<MapInfo> maps;
 int selectedMapIndex = 0; // Index of the selected map
 

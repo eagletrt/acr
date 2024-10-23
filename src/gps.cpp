@@ -63,7 +63,6 @@ void readGPSLoop() {
             continue;
         }
 
-        // Ensure 'get_t()' is declared and included
         gps_parse_buffer(&gps_data, &match, line, get_t());
 
         if (match.protocol == GPS_PROTOCOL_TYPE_UBX) {
