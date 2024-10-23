@@ -83,41 +83,10 @@ int main(int argc, char **argv) {
     float mapOpacity = 0.5f;
     float lastTime = glfwGetTime();
     bool resetView = false;
-    bool isFirstRun = true;
 
-    // Check for serial ports /dev/ttyACM0 and /dev/ttyACM1
-    const char* serialPorts[] = { "/dev/ttyACM0", "/dev/ttyACM1" };
-    const char* detectedPort = nullptr;
-
-    for (const char* port : serialPorts) {
-        struct stat statbuf;
-        if (stat(port, &statbuf) == 0 && S_ISCHR(statbuf.st_mode)) {
-            // Serial port exists
-            detectedPort = port;
-            break;
-        }
-    }
-
-    if (detectedPort) {
-        printf("Detected serial port: %s\n", detectedPort);
-        // Change permissions to allow reading
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "sudo chmod 666 %s", detectedPort);
-        system(cmd);
-        // Initialize GPS with the detected serial port
-        if (initializeGPS(detectedPort) == -1) {
-            printf("Error: GPS not found or failed to initialize on port %s.\n", detectedPort);
-            showPopup("GPS_Error", "Error", "GPS not found or failed to initialize.", NotificationType::Error);
-        } else {
-            // Start the GPS reading thread
-            kill_thread.store(false);
-            gpsThread = std::thread(readGPSLoop);
-            printf("Started reading GPS data from serial port %s.\n", detectedPort);
-            showPopup("GPS", "GPS Connected", "Reading GPS data from serial port.", NotificationType::Success);
-        }
-    } else {
-        printf("No serial port detected. Proceeding to file selection.\n");
-    }
+    // Variables per la nuova funzionalità GPS
+    static bool showGPSDialog = false;
+    static char serialPortInput[256] = "/dev/ttyACM0";
 
     while (!glfwWindowShouldClose(window)) {
         // Calculate delta time
@@ -144,67 +113,50 @@ int main(int argc, char **argv) {
 
         // Begin the fullscreen window "ACR"
         if (ImGui::Begin("ACR", nullptr, window_flags)) {
-            
-            if (isFirstRun) {
-                isFirstRun = false;
-                nfdu8filteritem_t logFilterList[] = {
-                    { "Log files", "log,txt" } 
-                };
-                size_t logFilterCount = sizeof(logFilterList) / sizeof(logFilterList[0]);
 
-                // Initialize dialog arguments
-                nfdopendialogu8args_t logArgs = {0};
-                logArgs.filterList = logFilterList;
-                logArgs.filterCount = logFilterCount;
-                logArgs.defaultPath = NULL; 
+            // Button to open GPS
+            if (ImGui::Button("Open GPS")) {
+                showGPSDialog = true;
+                // Optionally, pre-fill serialPortInput with a default value
+                strcpy(serialPortInput, "/dev/ttyACM0");
+                ImGui::OpenPopup("Open GPS");
+            }
 
-                nfdu8char_t* logOutPath = nullptr;
-
-                // Open file dialog to select the log file
-                nfdresult_t logResult = NFD_OpenDialogU8_With(&logOutPath, &logArgs);
-
-                if (logResult == NFD_OKAY && logOutPath != nullptr) {
-                    printf("Selected log file: %s\n", logOutPath);
-                    kill_thread.store(true);
-                    if (gpsThread.joinable()) {
-                        gpsThread.join();
-                    }
-
-                    gps_interface_close(&gps);
-
-                    if (gps_interface_open_file(&gps, logOutPath) == -1) {
-                        printf("Error opening selected file: %s\n", logOutPath);
-                        showPopup("FileBrowser", "Error", "Failed to open selected file.", NotificationType::Error);
-                    } else {
-                        {
-                            std::unique_lock<std::mutex> lck(renderLock);
-                            memset(&session, 0, sizeof(full_session_t));
-                            memset(&cone_session, 0, sizeof(cone_session_t));
-                            memset(&user_data, 0, sizeof(user_data_t));
-                            user_data.basepath = currentPath.c_str();
-                            user_data.cone = &cone;
-                            user_data.session = &session;
-                            user_data.cone_session = &cone_session;
-                            trajectory.clear();
-                            cones.clear();
-                            currentPosition = ImVec2(0.0f, 0.0f); 
+            // Open GPS modal dialog
+            if (showGPSDialog) {
+                if (ImGui::BeginPopupModal("Open GPS", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                    ImGui::InputText("Serial Port", serialPortInput, sizeof(serialPortInput));
+                    if (ImGui::Button("OK")) {
+                        // Attempt to initialize GPS with the entered serial port
+                        // Close existing GPS session if any
+                        kill_thread.store(true);
+                        if (gpsThread.joinable()) {
+                            gpsThread.join();
                         }
 
-                        kill_thread.store(false);
-                        gpsThread = std::thread(readGPSLoop);
+                        gps_interface_close(&gps);
 
-                        showPopup("Success", "Success", "Successfully loaded log file.", NotificationType::Success);
+                        // Initialize GPS with the entered serial port
+                        if (initializeGPS(serialPortInput) == -1) {
+                            printf("Error: GPS not found or failed to initialize on port %s.\n", serialPortInput);
+                            showPopup("GPS_Error", "Error", "GPS not found or failed to initialize.", NotificationType::Error);
+                        } else {
+                            // Start the GPS reading thread
+                            kill_thread.store(false);
+                            gpsThread = std::thread(readGPSLoop);
+                            printf("Started reading GPS data from serial port %s.\n", serialPortInput);
+                            showPopup("GPS", "GPS Connected", "Reading GPS data from serial port.", NotificationType::Success);
+                        }
+
+                        showGPSDialog = false;
+                        ImGui::CloseCurrentPopup();
                     }
-
-                    NFD_FreePathU8(logOutPath);
-                }
-                else if (logResult == NFD_CANCEL) {
-                    printf("User canceled log file selection.\n");
-                    glfwSetWindowShouldClose(window, false);
-                }
-                else {
-                    printf("Error selecting log file: %s\n", NFD_GetError());
-                    glfwSetWindowShouldClose(window, true);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel")) {
+                        showGPSDialog = false;
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::EndPopup();
                 }
             }
 
