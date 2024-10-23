@@ -11,16 +11,18 @@ pkg_check_modules(GLFW REQUIRED glfw3)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GTK REQUIRED gtk+-3.0)
 
+# Trova libreria pigpio
 find_library(pigpio_LIBRARY 
     NAMES pigpio
     HINTS /usr/local/lib
 )
 if(NOT pigpio_LIBRARY)
-    message(WARNING "pigpio not found")
+    message(WARNING "pigpio non trovato, disabilitando pigpio")
     set(pigpio_LIBRARY "")
     add_compile_definitions(ACR_NO_PIGPIO)
 endif()
 
+# Includi le directory necessarie
 include_directories(
     ${GLIB_INCLUDE_DIRS}
     ${GTK_INCLUDE_DIRS}
@@ -32,10 +34,11 @@ include_directories(
 
 add_definitions(${GLIB_CFLAGS_OTHER} ${GTK_CFLAGS_OTHER})
 
+# Aggiungi il sottodirectory di nativefiledialog-extended
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended)
 
-add_library(acr
-    STATIC
+# Libreria acr
+add_library(acr STATIC
     ${CMAKE_CURRENT_LIST_DIR}/src/acr.c
     ${CMAKE_CURRENT_LIST_DIR}/src/led.c
     ${CMAKE_CURRENT_LIST_DIR}/src/gpio.c
@@ -50,8 +53,8 @@ target_include_directories(acr PUBLIC
 target_compile_options(acr PRIVATE -O -g -Wall -Wextra)
 target_link_libraries(acr PUBLIC ${pigpio_LIBRARY} ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
 
-add_library(gps
-    STATIC
+# Libreria gps
+add_library(gps STATIC
     ${CMAKE_CURRENT_LIST_DIR}/external/gpslib/gps.c
     ${CMAKE_CURRENT_LIST_DIR}/external/gpslib/gps_interface.c
 )
@@ -63,8 +66,10 @@ target_include_directories(gps PUBLIC
 target_compile_options(gps PRIVATE -O -g -Wall -Wextra)
 target_link_libraries(gps PUBLIC ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
 
+# Directory per eseguibili
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin)
 
+# Eseguibile main
 add_executable(main src/main.c)
 target_include_directories(main PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/inc
@@ -76,9 +81,19 @@ target_link_libraries(main acr gps m pthread ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
 
 find_package(OpenGL REQUIRED)
 find_library(GLX_LIBRARY GLX)
-
-add_executable(viewer
+set(VIEWER_SOURCES
     src/viewer.cpp
+    src/gui.cpp
+    src/gps.cpp
+    src/file_browser.cpp
+    src/notifications.cpp
+    src/map.cpp
+    src/font_manager.cpp
+    src/icon_manager.cpp
+    src/gps.cpp
+    src/map.cpp 
+    src/utils.cpp
+    src/cones_loader.cpp
     external/imgui/imgui.cpp
     external/imgui/imgui_draw.cpp
     external/imgui/imgui_widgets.cpp
@@ -91,6 +106,30 @@ add_executable(viewer
     external/implot/implot_demo.cpp
 )
 
+FILE(GLOB prova ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
+add_library(prova_src STATIC ${prova})
+target_include_directories(prova_src PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}              
+    ${CMAKE_CURRENT_LIST_DIR}/inc
+    ${CMAKE_CURRENT_LIST_DIR}/external
+    ${CMAKE_CURRENT_LIST_DIR}/external/imgui
+    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/backends
+    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/misc/cpp
+    ${CMAKE_CURRENT_LIST_DIR}/external/implot
+    ${GLFW_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended/src/include
+    ${GLIB_INCLUDE_DIRS}
+    ${GTK_INCLUDE_DIRS}
+)
+target_link_libraries(
+    prova_src 
+    gps
+    
+)
+
+add_executable(viewer ${VIEWER_SOURCES})
+
+# Includi directory necessarie per il viewer
 target_include_directories(viewer PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}              
     ${CMAKE_CURRENT_LIST_DIR}/inc
@@ -105,7 +144,20 @@ target_include_directories(viewer PRIVATE
     ${GTK_INCLUDE_DIRS}
 )
 
+# Imposta opzioni di compilazione per viewer
 target_compile_options(viewer PRIVATE -O -g -Wall -Wextra)
-target_link_libraries(viewer acr gps m pthread OpenGL::GL glfw nfd ${GLIB_LIBRARIES} ${GTK_LIBRARIES} ${GLX_LIBRARY})
 
-
+# Linka librerie necessarie per viewer
+target_link_libraries(viewer
+    acr
+    gps
+    m
+    pthread
+    OpenGL::GL
+    ${GLFW_LIBRARIES}  # Assicurati di usare GLFW_LIBRARIES da pkg_check_modules
+    nfd
+    ${GLIB_LIBRARIES}
+    ${GTK_LIBRARIES}
+    ${GLX_LIBRARY}
+    prova_src
+)

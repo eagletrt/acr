@@ -1,16 +1,15 @@
 #define STB_IMAGE_IMPLEMENTATION
-#include "viewer.hpp"
-#include <GLFW/glfw3.h>
+#include "viewer.hpp" 
 #include <string.h>
 #include <atomic>
-#include <algorithm> // For std::sort
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <thread>
 #include <vector>
-#include <queue> // Include <queue>
+#include <queue> 
 #include "imgui/imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
@@ -26,681 +25,15 @@ extern "C" {
 #include "utils.h"
 }
 
-std::mutex renderLock;
-std::atomic<bool> kill_thread(false);
-std::atomic<bool> save_cone(false);
-bool conePlacementMode = false; // Indicates if we are in cone placement mode
-
-gps_serial_port gps;
-gps_parsed_data_t gps_data;
-cone_t cone;
-user_data_t user_data;
-full_session_t session;
-cone_session_t cone_session;
-
-ImVec2 currentPosition;
-std::vector<ImVec2> trajectory;
-std::vector<cone_t> cones;
-
-// Map Boundaries
-ImVec2 povoBoundBL{11.1484815430000008, 46.0658863580000002};
-ImVec2 povoBoundTR{11.1515535430000003, 46.0689583580000033};
-ImVec2 vadenaBoundBL{11.3097566090000008, 46.4300119620000018};
-ImVec2 vadenaBoundTR{11.3169246090000009, 46.4382039620000029};
-ImVec2 fsgBoundBL{8.558931763076039, 49.32344089057215};
-ImVec2 fsgBoundTR{8.595726757113576, 49.335430701657735};
-ImVec2 alaBoundBL{11.010747212958533, 45.784567764275764};
-ImVec2 alaBoundTR{11.013506837511347, 45.78713363420464};
-ImVec2 varanoBoundBL{10.013347232876077, 44.67756187921092};
-ImVec2 varanoBoundTR{10.031744729894845, 44.684102509035036};
-
-// File Browser State
-bool showFileBrowser = true; // Set to true to open automatically
-std::string currentPath = "acr"; // Set initial directory to 'acr'
-std::vector<std::filesystem::directory_entry> entries;
-std::string selectedFile = "";
-
-// GPS Thread
-std::thread gpsThread;
-
-// Font Control Variables
-struct FontInfo {
-    std::string name;
-    ImFont* font;
-};
-std::vector<FontInfo> availableFonts;
-int selectedFontIndex = 0; // Selected font index
-float fontScale = 1.0f; // Initial font scale
-
-// Icon Control Variables
-struct IconInfo {
-    std::string name;
-    ImTextureID texture;
-    ImVec2 size;
-};
-std::vector<IconInfo> icons;
-
-// Active Notifications
-enum class NotificationType {
-    Info,
-    Success,
-    Error
-};
-
-// Updated ActiveNotification Structure
-struct ActiveNotification {
-    std::string source;          // Unique identifier for the notification
-    std::string title;           // Notification title
-    std::string message;         // Notification message
-    NotificationType type;       // Type of notification
-    float displayDuration;       // Duration in seconds
-    float elapsedTime;           // Elapsed time in seconds
-};
-
-struct MapInfo {
-    std::string name;      // Name of the map
-    std::string filePath;  // Path to the image file
-    ImVec2 boundBL;        // Bottom-left boundary coordinates
-    ImVec2 boundTR;        // Top-right boundary coordinates
-    ImTextureID texture;   // Loaded texture ID
-};
-
-std::vector<MapInfo> maps;
-int selectedMapIndex = 0; // Index of the selected map
-
-std::vector<ActiveNotification> activeNotifications;
-std::mutex activeNotificationsMutex;
-
-// Selected Cone for Context Menu and Dragging
-int selectedConeIndex = -1;
-bool showConeContextMenu = false;
-
-// Dragging State
-bool isDraggingCone = false;
-int draggingConeIndex = -1;
-
-// Function Declarations
-void readGPSLoop();
-ImTextureID loadImageJPG(const char *path);
-ImTextureID loadImagePNG(const char *path); // Function to load PNG icons
-GLFWwindow *setupImGui();
-void startFrame();
-void endFrame(GLFWwindow *window);
-void renderFileBrowser();
-void loadFontsFromDirectory(ImGuiIO& io, const std::string& fontsDir);
-void loadIcons(); // Function to load icons
-void processNotifications(float deltaTime);
-void showPopup(const std::string& source, const std::string& title, const std::string& message, NotificationType type);
-int findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cones, float hitRadius);
-
-// ----------------------- Function Definitions -----------------------
-
-// Function to get Desktop path
-std::string getDesktopPath() {
-#ifdef _WIN32
-    const char* home = getenv("USERPROFILE");
-    if (home) {
-        return std::string(home) + "\\Desktop";
-    }
-#else
-    const char* home = getenv("HOME");
-    if (home) {
-        return std::string(home) + "/Desktop";
-    }
-#endif
-    // Fallback to current directory if HOME is not found
-    return ".";
-}
-
-// Function to load multiple fonts from the fonts directory
-void loadFontsFromDirectory(ImGuiIO& io, const std::string& fontsDir) {
-    // Supported font file extensions
-    std::vector<std::string> extensions = { ".ttf", ".otf" };
-
-    for (const auto& entry : std::filesystem::directory_iterator(fontsDir)) {
-        if (entry.is_regular_file()) {
-            std::string path = entry.path().string();
-            std::string ext = entry.path().extension().string();
-            // Check if the file has a supported font extension
-            if (std::find(extensions.begin(), extensions.end(), ext) != extensions.end()) {
-                // Extract font name from filename
-                std::string name = entry.path().stem().string();
-                // Load font with default size
-                ImFont* font = io.Fonts->AddFontFromFileTTF(path.c_str(), 16.0f);
-                if (font) {
-                    availableFonts.push_back(FontInfo{ name, font });
-                    printf("Loaded font: %s\n", name.c_str());
-                }
-                else {
-                    printf("Failed to load font: %s\n", path.c_str());
-                }
-            }
-        }
-    }
-
-    // If no fonts were loaded, load the default font
-    if (availableFonts.empty()) {
-        availableFonts.push_back(FontInfo{ "Default", io.Fonts->AddFontDefault() });
-        printf("No custom fonts found. Loaded default font.\n");
-    }
-}
-
-// Function to load an image and create an OpenGL texture (JPEG)
-ImTextureID loadImageJPG(const char *path)
-{
-    int width, height, channels;
-    unsigned char *data = stbi_load(path, &width, &height, &channels, 4);
-    if (data == NULL) {
-        printf("Error loading image: %s\n", path);
-        return 0;
-    }
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, data);
-    stbi_image_free(data);
-    return (ImTextureID)(intptr_t)tex;
-}
-
-// Function to load an image and create an OpenGL texture (PNG)
-ImTextureID loadImagePNG(const char* path) {
-    int width, height, channels;
-    unsigned char* data = stbi_load(path, &width, &height, &channels, 4);
-    if (data == NULL) {
-        printf("Error loading image: %s\n", path);
-        return 0;
-    }
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    // Upload image data to the texture
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
-    stbi_image_free(data);
-    return (ImTextureID)(intptr_t)tex;
-}
-
-// Function to set up a custom ImGui theme
-void setCustomTheme() {
-    ImGuiStyle& style = ImGui::GetStyle();
-
-    // Base colors
-    ImVec4* colors = style.Colors;
-    colors[ImGuiCol_WindowBg]             = ImVec4(0.13f, 0.14f, 0.17f, 1.00f);
-    colors[ImGuiCol_ChildBg]              = ImVec4(0.13f, 0.14f, 0.17f, 1.00f);
-    colors[ImGuiCol_FrameBg]              = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
-    colors[ImGuiCol_FrameBgHovered]       = ImVec4(0.30f, 0.33f, 0.38f, 1.00f);
-    colors[ImGuiCol_FrameBgActive]        = ImVec4(0.30f, 0.33f, 0.38f, 1.00f);
-    colors[ImGuiCol_TitleBg]              = ImVec4(0.09f, 0.10f, 0.12f, 1.00f);
-    colors[ImGuiCol_TitleBgActive]        = ImVec4(0.16f, 0.17f, 0.20f, 1.00f);
-    colors[ImGuiCol_MenuBarBg]            = ImVec4(0.16f, 0.17f, 0.20f, 1.00f);
-    colors[ImGuiCol_ScrollbarBg]          = ImVec4(0.02f, 0.02f, 0.02f, 0.39f);
-    colors[ImGuiCol_ScrollbarGrab]        = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.30f, 0.33f, 0.38f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(0.30f, 0.33f, 0.38f, 1.00f);
-    colors[ImGuiCol_Button]               = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
-    colors[ImGuiCol_ButtonHovered]        = ImVec4(0.30f, 0.33f, 0.38f, 1.00f);
-    colors[ImGuiCol_ButtonActive]         = ImVec4(0.09f, 0.10f, 0.12f, 1.00f);
-    colors[ImGuiCol_Header]               = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
-    colors[ImGuiCol_HeaderHovered]        = ImVec4(0.30f, 0.33f, 0.38f, 1.00f);
-    colors[ImGuiCol_HeaderActive]         = ImVec4(0.09f, 0.10f, 0.12f, 1.00f);
-    colors[ImGuiCol_Separator]            = ImVec4(0.30f, 0.33f, 0.38f, 1.00f);
-    colors[ImGuiCol_SeparatorHovered]     = ImVec4(0.40f, 0.43f, 0.47f, 1.00f);
-    colors[ImGuiCol_SeparatorActive]      = ImVec4(0.50f, 0.53f, 0.57f, 1.00f);
-    colors[ImGuiCol_Text]                 = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-    colors[ImGuiCol_TextDisabled]         = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
-
-    // Adjust style variables
-    style.WindowRounding    = 5.0f;
-    style.FrameRounding     = 5.0f;
-    style.ScrollbarRounding = 5.0f;
-    style.GrabRounding      = 5.0f;
-    style.FramePadding      = ImVec2(5.0f, 5.0f);
-    style.ItemSpacing       = ImVec2(10.0f, 10.0f);
-    style.IndentSpacing     = 20.0f;
-    style.ScrollbarSize     = 15.0f;
-    style.WindowPadding     = ImVec2(0.0f, 0.0f); // Removed padding for fullscreen
-}
-
-// Function to load icons
-void loadIcons() {
-    // Example: Load an information icon
-    ImTextureID infoIcon = loadImagePNG("icons/info.png"); // Ensure the path is correct
-    if (infoIcon != 0) {
-        icons.push_back({ "Info", infoIcon, ImVec2(16, 16) });
-        printf("Loaded icon: Info\n");
-    } else {
-        printf("Failed to load icon: info.png\n");
-    }
-
-    // Example: Load a success icon
-    ImTextureID successIcon = loadImagePNG("icons/success.png"); // Ensure the path is correct
-    if (successIcon != 0) {
-        icons.push_back({ "Success", successIcon, ImVec2(16, 16) });
-        printf("Loaded icon: Success\n");
-    } else {
-        printf("Failed to load icon: success.png\n");
-    }
-
-    // Example: Load an error icon
-    ImTextureID errorIcon = loadImagePNG("icons/error.png"); // Ensure the path is correct
-    if (errorIcon != 0) {
-        icons.push_back({ "Error", errorIcon, ImVec2(16, 16) });
-        printf("Loaded icon: Error\n");
-    } else {
-        printf("Failed to load icon: error.png\n");
-    }
-
-    // Add more icons as needed
-}
-
-// Function to set up ImGui and create a GLFW window
-GLFWwindow *setupImGui() {
-    if (!glfwInit())
-        return nullptr;
-
-    // Create fullscreen window by passing the primary monitor
-    GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
-    const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
-    GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "ACR", nullptr, nullptr);
-    if (window == nullptr)
-        return nullptr;
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
-    ImGui::CreateContext();
-    ImPlot::CreateContext();
-    ImGuiIO &io = ImGui::GetIO();
-    (void)io;
-    io.ConfigFlags |=
-        ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-
-    // Apply custom theme
-    setCustomTheme();
-
-    // Initialize ImGui backends
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL2_Init();
-
-    // Load fonts from the 'fonts' directory
-    loadFontsFromDirectory(io, "../assets/fonts/");
-
-    // Set the default font
-    if (!availableFonts.empty()) {
-        io.FontDefault = availableFonts[selectedFontIndex].font;
-    }
-
-    return window;
-}
-
-// Function to start a new ImGui frame
-void startFrame() {
-    glfwPollEvents();
-
-    // Start the Dear ImGui frame
-    ImGui_ImplOpenGL2_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-}
-
-// Function to render the ImGui frame and swap buffers
-void endFrame(GLFWwindow *window) {
-    ImGui::Render();
-    int display_w, display_h;
-    glfwGetFramebufferSize(window, &display_w, &display_h);
-    glViewport(0, 0, display_w, display_h);
-    glClearColor(0.10f, 0.10f, 0.10f, 1.00f); // Dark background
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    // Render ImGui Draw Data
-    ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
-
-    glfwMakeContextCurrent(window);
-    glfwSwapBuffers(window);
-}
-
-// Function to show a popup notification
-void showPopup(const std::string& source, const std::string& title, const std::string& message, NotificationType type) {
-    std::lock_guard<std::mutex> lock(activeNotificationsMutex);
-    // Check if a notification with the same source already exists
-    bool found = false;
-    for (auto& notif : activeNotifications) {
-        if (notif.source == source) {
-            notif.elapsedTime = 0.0f; // Reset elapsed time
-            found = true;
-            break;
-        }
-    }
-    if (!found) {
-        // Remove all existing notifications
-        activeNotifications.clear();
-        // Add the new notification with all members initialized
-        activeNotifications.emplace_back(ActiveNotification{ source, title, message, type, 2.0f, 0.0f });
-    }
-}
-
-void processNotifications(float deltaTime) {
-    std::lock_guard<std::mutex> lock(activeNotificationsMutex);
-    int notificationIndex = 0;
-    const int MAX_NOTIFICATIONS = 5; // Limit the maximum number of visible notifications
-
-    // Remove excess notifications
-    if (activeNotifications.size() > MAX_NOTIFICATIONS) {
-        activeNotifications.erase(activeNotifications.begin(), activeNotifications.begin() + (activeNotifications.size() - MAX_NOTIFICATIONS));
-    }
-
-    // Get the main viewport
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImVec2 viewportPos = viewport->Pos;
-    ImVec2 viewportSize = viewport->Size;
-
-    float padding = 10.0f;
-    float notificationWidth = 300.0f;
-    float notificationHeight = 60.0f;
-
-    for (auto it = activeNotifications.begin(); it != activeNotifications.end(); ) {
-        it->elapsedTime += deltaTime;
-        if (it->elapsedTime >= it->displayDuration) {
-            it = activeNotifications.erase(it);
-            continue;
-        }
-        // Calculate transparency for fade-in and fade-out effect
-        float alpha = 0.8f;
-        float fadeInTime = 0.5f;
-        float fadeOutTime = 0.5f;
-
-        if (it->elapsedTime < fadeInTime) {
-            alpha *= (it->elapsedTime / fadeInTime);
-        } else if (it->displayDuration - it->elapsedTime < fadeOutTime) {
-            alpha *= ((it->displayDuration - it->elapsedTime) / fadeOutTime);
-        }
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, alpha));
-
-        // Determine colors and icons based on notification type
-        ImVec4 textColor;
-        ImTextureID iconTexture = 0;
-        switch (it->type) {
-            case NotificationType::Success:
-                textColor = ImVec4(0.0f, 1.0f, 0.0f, 1.0f); // Green
-                for (const auto& icon : icons) {
-                    if (icon.name == "Success") {
-                        iconTexture = icon.texture;
-                        break;
-                    }
-                }
-                break;
-            case NotificationType::Error:
-                textColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Red
-                for (const auto& icon : icons) {
-                    if (icon.name == "Error") {
-                        iconTexture = icon.texture;
-                        break;
-                    }
-                }
-                break;
-            case NotificationType::Info:
-            default:
-                textColor = ImVec4(0.0f, 0.0f, 1.0f, 1.0f); // Blue
-                for (const auto& icon : icons) {
-                    if (icon.name == "Info") {
-                        iconTexture = icon.texture;
-                        break;
-                    }
-                }
-                break;
-        }
-
-        // Define the position of the notification
-        ImVec2 windowPos = ImVec2(
-            viewportPos.x + viewportSize.x - notificationWidth - padding,
-            viewportPos.y + viewportSize.y - notificationHeight - padding - (notificationHeight + padding) * notificationIndex
-        );
-
-        ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(notificationWidth, notificationHeight));
-
-        // Define window flags (rimosso ImGuiWindowFlags_NoBackground)
-        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                                         ImGuiWindowFlags_NoCollapse;
-
-        // Unique window name
-        std::string windowName = "Notification_" + it->source + "_" + std::to_string(notificationIndex);
-
-        if (ImGui::Begin(windowName.c_str(), nullptr, window_flags)) {
-            // Notification icon
-            if (iconTexture != 0 && !icons.empty()) {
-                ImGui::Image(iconTexture, ImVec2(24, 24));
-                ImGui::SameLine();
-            }
-
-            // Notification title
-            ImGui::TextColored(textColor, "%s", it->title.c_str());
-            ImGui::Separator();
-            // Notification message
-            ImGui::TextWrapped("%s", it->message.c_str());
-        }
-        ImGui::End();
-
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor();
-
-        ++it;
-        ++notificationIndex;
-    }
-}
-
-// Function to render the custom in-app file browser
-void renderFileBrowser() {
-    ImGui::Begin("File Browser", &showFileBrowser, ImGuiWindowFlags_AlwaysAutoResize);
-
-    // Display current path
-    ImGui::Text("Current Path: %s", currentPath.c_str());
-
-    // Navigation buttons
-    if (currentPath != std::filesystem::path(currentPath).root_path()) {
-        if (ImGui::Button("..")) {
-            currentPath = std::filesystem::path(currentPath).parent_path().string();
-        }
-        ImGui::SameLine();
-    }
-
-    // Refresh directory entries
-    entries.clear();
-    try {
-        for (const auto& entry : std::filesystem::directory_iterator(currentPath)) {
-            entries.emplace_back(entry);
-        }
-    }
-    catch (const std::filesystem::filesystem_error& e) {
-        ImGui::TextColored(ImVec4(1,0,0,1), "Error accessing directory.");
-    }
-
-    // Sort entries: directories first, then files
-    std::sort(entries.begin(), entries.end(), [](const std::filesystem::directory_entry& a, const std::filesystem::directory_entry& b) {
-        if (a.is_directory() && !b.is_directory()) return true;
-        if (!a.is_directory() && b.is_directory()) return false;
-        return a.path().filename().string() < b.path().filename().string();
-    });
-
-    // Display entries
-    for (const auto& entry : entries) {
-        const auto& path = entry.path();
-        std::string name = path.filename().string();
-        if (entry.is_directory()) {
-            if (ImGui::Selectable((std::string("[") + name + "]").c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
-                currentPath = path.string();
-            }
-        }
-        else {
-            if (ImGui::Selectable(name.c_str())) {
-                // Only allow selection of log files (e.g., .log, .txt)
-                if (path.extension() == ".log" || path.extension() == ".txt") {
-                    selectedFile = path.string();
-                }
-            }
-        }
-    }
-
-    // Load button
-    if (!selectedFile.empty()) {
-        if (ImGui::Button("Load")) {
-            // Implement file loading logic here
-            printf("Selected file: %s\n", selectedFile.c_str());
-
-            // Stop existing GPS thread
-            kill_thread.store(true);
-            if (gpsThread.joinable()) {
-                gpsThread.join();
-            }
-
-            // Close previous GPS interface
-            gps_interface_close(&gps);
-
-            // Open the selected log file
-            if (gps_interface_open_file(&gps, selectedFile.c_str()) == -1) {
-                printf("Failed to open selected file: %s\n", selectedFile.c_str());
-                showPopup("FileBrowser", "Error", "Failed to open selected file.", NotificationType::Error);
-            }
-            else {
-                // Reset session data and clear previous data
-                {
-                    std::unique_lock<std::mutex> lck(renderLock);
-                    memset(&session, 0, sizeof(full_session_t));
-                    memset(&cone_session, 0, sizeof(cone_session_t));
-                    memset(&user_data, 0, sizeof(user_data_t));
-                    user_data.basepath = currentPath.c_str();
-                    user_data.cone = &cone;
-                    user_data.session = &session;
-                    user_data.cone_session = &cone_session;
-                    trajectory.clear();
-                    cones.clear();
-                    currentPosition = ImVec2(0.0f, 0.0f); // Reset current GPS position
-                }
-
-                // Restart the GPS thread
-                kill_thread.store(false);
-                gpsThread = std::thread(readGPSLoop);
-
-                // Show success notification
-                showPopup("Success", "Success", "Successfully loaded log file.", NotificationType::Success);
-            }
-
-            selectedFile.clear();
-            showFileBrowser = false; // Close the file browser
-        }
-
-        // Tooltip for Load button
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Click to load the selected log file.");
-        }
-    }
-
-    ImGui::End();
-}
-
-// Function to read GPS data in a separate thread
-void readGPSLoop() {
-    int fail_count = 0;
-    int res = 0;
-    unsigned char start_sequence[GPS_MAX_START_SEQUENCE_SIZE];
-    char line[GPS_MAX_LINE_SIZE];
-    while (!kill_thread.load()) {
-        int start_size, line_size;
-        gps_protocol_type protocol;
-        protocol = gps_interface_get_line(&gps, start_sequence, &start_size, line, &line_size, true);
-        if (protocol == GPS_PROTOCOL_TYPE_SIZE) {
-            fail_count++;
-            if (fail_count > 10) {
-                printf("Error: GPS disconnected or unable to read data.\n");
-                showPopup("GPS_Error", "Error", "GPS disconnected or unable to read data.", NotificationType::Error);
-                return;
-            }
-            continue;
-        }
-        else {
-            fail_count = 0;
-        }
-
-        gps_protocol_and_message match;
-        res = gps_match_message(&match, line, protocol);
-        if (res == -1) {
-            continue;
-        }
-
-        gps_parse_buffer(&gps_data, &match, line, get_t());
-
-        if (match.protocol == GPS_PROTOCOL_TYPE_UBX) {
-            if (match.message == GPS_UBX_TYPE_NAV_HPPOSLLH) {
-                std::unique_lock<std::mutex> lck(renderLock);
-                static double height = 0.0;
-
-                if (CONE_ENABLE_MEAN && currentPosition.x != 0.0 && currentPosition.y != 0.0) {
-                    currentPosition.x = currentPosition.x * CONE_MEAN_COMPLEMENTARY + gps_data.hpposllh.lon * (1.0 - CONE_MEAN_COMPLEMENTARY);
-                    currentPosition.y = currentPosition.y * CONE_MEAN_COMPLEMENTARY + gps_data.hpposllh.lat * (1.0 - CONE_MEAN_COMPLEMENTARY);
-                    height = height * CONE_MEAN_COMPLEMENTARY + gps_data.hpposllh.height * (1.0 - CONE_MEAN_COMPLEMENTARY);
-                }
-                else {
-                    currentPosition.x = gps_data.hpposllh.lon;
-                    currentPosition.y = gps_data.hpposllh.lat;
-                    height = gps_data.hpposllh.height;
-                }
-
-                cone.timestamp = gps_data.hpposllh._timestamp;
-                cone.lon = currentPosition.x;
-                cone.lat = currentPosition.y;
-                cone.alt = height;
-
-                static int count = 0;
-                if (session.active && count % 10 == 0) {
-                    trajectory.push_back(currentPosition);
-                    count = 0;
-                }
-                count++;
-            }
-        }
-
-        if (session.active) {
-            gps_to_file(&session.files, &gps_data, &match);
-        }
-
-        if (save_cone.load()) {
-            save_cone.store(false);
-            cone_session_write(&cone_session, &cone);
-            FILE *tmp = cone_session.file;
-            cone_session.file = stdout;
-            cone_session_write(&cone_session, &cone);
-            cone_session.file = tmp;
-            cones.push_back(cone);
-        }
-    }
-}
-
-// Function to find the index of the closest cone to a point on the map
-int findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cones, float hitRadius) {
-    int closestIndex = -1;
-    float closestDistance = hitRadius;  // Consider the cone only if it's within this radius
-
-    for (size_t i = 0; i < cones.size(); ++i) {
-        float distance = sqrtf(powf(mousePos.x - cones[i].lon, 2) + powf(mousePos.y - cones[i].lat, 2));
-        if (distance < closestDistance) {
-            closestIndex = static_cast<int>(i);
-            closestDistance = distance;
-        }
-    }
-
-    return closestIndex;  // Return the index of the closest cone, or -1 if none is close enough
-}
+#include "gui.hpp"
+#include "gps.hpp"
+#include "file_browser.hpp"
+#include "notifications.hpp"
+#include "map.hpp"
+#include "font_manager.hpp"
+#include "icon_manager.hpp"
+#include "utils.hpp"
+#include "cones_loader.hpp"
 
 int main(int argc, char **argv) {
     const char *port_or_file = nullptr;
@@ -709,8 +42,8 @@ int main(int argc, char **argv) {
     }
     NFD_Init();
 
-    // Set initial directory to Desktop
-    currentPath = getDesktopPath();
+    std::string desktopPath = getDesktopPath();
+    currentPath = desktopPath;
 
     const char *basepath = getenv("HOME");
 
@@ -719,82 +52,33 @@ int main(int argc, char **argv) {
         printf("Failed to initialize GLFW or create window.\n");
         return -1;
     }
-
     // Load icons
     loadIcons();
 
+    // Initialize session data
     memset(&session, 0, sizeof(full_session_t));
     memset(&cone_session, 0, sizeof(cone_session_t));
     memset(&user_data, 0, sizeof(user_data_t));
-    user_data.basepath = currentPath.c_str(); // Updated to use currentPath
+    user_data.basepath = currentPath.c_str(); 
     user_data.cone = &cone;
     user_data.session = &session;
     user_data.cone_session = &cone_session;
 
     int res = 0;
-    gps_interface_initialize(&gps);
-    if (port_or_file) {
-        if (std::filesystem::is_character_file(port_or_file)) {
-            char buff[255];
-            snprintf(buff, 255, "sudo chmod 777 %s", port_or_file);
-            printf("Changing permissions on serial port: %s with command: %s\n",
-                   port_or_file, buff);
-            system(buff);
-            res = gps_interface_open(&gps, port_or_file, B230400);
-        }
-        else if (std::filesystem::is_regular_file(port_or_file)) {
-            printf("Opening file: %s\n", port_or_file);
-            res = gps_interface_open_file(&gps, port_or_file);  // No need to call .c_str() on const char*
-        }
-        else {
-            printf("Error: %s does not exist.\n", port_or_file);
-            showPopup("FileBrowser", "Error", "Specified file does not exist.", NotificationType::Error);
-            // Show the file browser if the specified file does not exist
-            showFileBrowser = true;
-        }
-        if (res == -1) {
-            printf("Error: GPS not found or failed to initialize.\n");
-            showPopup("GPS_Error", "Error", "GPS not found or failed to initialize.", NotificationType::Error);
-            // Show the file browser in case of initialization failure
-            showFileBrowser = true;
-        }
-        else if (port_or_file && std::filesystem::is_regular_file(port_or_file)) {
-            // Start the GPS thread only if a file was successfully opened
-            gpsThread = std::thread(readGPSLoop);
-        }
-    }   
+    res = initializeGPS(port_or_file);
+    if (port_or_file && std::filesystem::is_regular_file(port_or_file)) {
+        gpsThread = std::thread(readGPSLoop);
+    }
 
     // Adding maps
-    maps.push_back({"Povo", "../assets/Povo.jpg", povoBoundBL, povoBoundTR, 0});
-    maps.push_back({"Vadena", "../assets/Vadena.jpg", vadenaBoundBL, vadenaBoundTR, 0});
-    maps.push_back({"FSG", "../assets/FSG.jpg", fsgBoundBL, fsgBoundTR, 0});
-    maps.push_back({"Ala", "../assets/Ala.jpg", alaBoundBL, alaBoundTR, 0});
-    maps.push_back({"Varano", "../assets/Varano.jpg", varanoBoundBL, varanoBoundTR, 0});
+    addMap("Povo", "../assets/Povo.jpg", ImVec2{11.1484815430000008, 46.0658863580000002}, ImVec2{11.1515535430000003, 46.0689583580000033});
+    addMap("Vadena", "../assets/Vadena.jpg", ImVec2{11.3097566090000008, 46.4300119620000018}, ImVec2{11.3169246090000009, 46.4382039620000029});
+    addMap("FSG", "../assets/FSG.jpg", ImVec2{8.558931763076039, 49.32344089057215}, ImVec2{8.595726757113576, 49.335430701657735});
+    addMap("Ala", "../assets/Ala.jpg", ImVec2{11.010747212958533, 45.784567764275764}, ImVec2{11.013506837511347, 45.78713363420464});
+    addMap("Varano", "../assets/Varano.jpg", ImVec2{10.013347232876077, 44.67756187921092}, ImVec2{10.031744729894845, 44.684102509035036});
 
     // Load textures for each map
-    for (auto& map : maps) {
-        map.texture = loadImageJPG(map.filePath.c_str());
-        if (map.texture == 0) {
-            printf("Error loading map image: %s\n", map.filePath.c_str());
-            showPopup("Map_Error", "Error", "Unable to load map: " + map.name + "", NotificationType::Error);
-        }
-        else {
-            printf("Map loaded successfully: %s\n", map.name.c_str());
-        }
-    }
-
-    // Check if at least one map was loaded successfully
-    bool anyMapLoaded = false;
-    for (const auto& map : maps) {
-        if (map.texture != 0) {
-            anyMapLoaded = true;
-            break;
-        }
-    }
-    if (!anyMapLoaded) {
-        printf("Error: No map was loaded successfully.\n");
-        showPopup("Map_Error", "Error", "No map was loaded successfully.", NotificationType::Error);
-    }
+    loadMapTextures();
 
     float mapOpacity = 0.5f;
 
@@ -843,7 +127,7 @@ int main(int argc, char **argv) {
                 nfdopendialogu8args_t args = {0};
                 args.filterList = filterList;
                 args.filterCount = filterCount;
-                args.defaultPath = NULL; // You can specify a default path if desired
+                args.defaultPath = NULL; 
 
                 // Correct declaration of outPath
                 nfdu8char_t* outPath = nullptr;
@@ -902,7 +186,43 @@ int main(int argc, char **argv) {
                 }
             }
 
-            // Settings Section using Tabs
+            if (ImGui::Button("Load Cones CSV")) {
+    nfdu8filteritem_t filterList[] = {
+        { "CSV files", "csv" }  
+    };
+    size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
+
+    nfdopendialogu8args_t args = {0};
+    args.filterList = filterList;
+    args.filterCount = filterCount;
+    args.defaultPath = NULL; 
+
+    nfdu8char_t* outPath = nullptr;
+
+    nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+
+    if (result == NFD_OKAY && outPath != nullptr) {
+        printf("Selected CSV file: %s\n", outPath);
+
+        if (loadConesFromCSV(outPath)) {
+            showPopup("Cones_Loaded", "Success", "Successfully loaded cones from CSV.", NotificationType::Success);
+            printf("Cones loaded from CSV: %s\n", outPath);
+            resetView = true; 
+        } else {
+            showPopup("Cones_Load_Error", "Error", "Failed to load cones from the selected CSV file.", NotificationType::Error);
+            printf("Failed to load cones from CSV: %s\n", outPath);
+        }
+
+        NFD_FreePathU8(outPath);
+    }
+    else if (result == NFD_CANCEL) {
+        printf("User canceled CSV file selection.\n");
+    }
+    else {
+        printf("Error selecting CSV file: %s\n", NFD_GetError());
+    }
+}
+
             if (ImGui::BeginTabBar("MainTabBar")) {
                 if (ImGui::BeginTabItem("Help")) {
                     ImGui::Text("Quit (Q)");
@@ -1048,11 +368,32 @@ int main(int argc, char **argv) {
             if (ImPlot::BeginPlot("GpsPositions", size, ImPlotFlags_Equal | ImPlotFlags_NoTitle)) {
                 const MapInfo& selectedMap = maps[selectedMapIndex];
 
-                // **Important Modification:** Set axis limits only once or when the map changes
+                // Set axis limits only once or when the map changes
                 if (resetView) {
+
+                    float minLon = selectedMap.boundBL.x;
+        float maxLon = selectedMap.boundTR.x;
+        float minLat = selectedMap.boundBL.y;
+        float maxLat = selectedMap.boundTR.y;
+
+        for (const auto& cone : cones) {
+            if (cone.lon < minLon) minLon = cone.lon;
+            if (cone.lon > maxLon) maxLon = cone.lon;
+            if (cone.lat < minLat) minLat = cone.lat;
+            if (cone.lat > maxLat) maxLat = cone.lat;
+        }
+
+
                     // Set axis limits with a margin
                     float margin_x = 0.0005f; // Define desired margin
                     float margin_y = 0.0005f;
+
+                    ImPlot::SetupAxesLimits(
+            minLon - margin_x, maxLon + margin_x,
+            minLat - margin_y, maxLat + margin_y,
+            ImGuiCond_Always
+        );
+
 
                     ImPlot::SetupAxesLimits(
                         selectedMap.boundBL.x - margin_x, selectedMap.boundTR.x + margin_x,
@@ -1154,28 +495,13 @@ int main(int argc, char **argv) {
                 ImTextureID coneIcon = 0;
                 switch (cones[selectedConeIndex].id) {
                     case CONE_ID_ORANGE:
-                        for (const auto& icon : icons) {
-                            if (icon.name == "Success") {
-                                coneIcon = icon.texture;
-                                break;
-                            }
-                        }
+                        coneIcon = getIconTexture("Success");
                         break;
                     case CONE_ID_YELLOW:
-                        for (const auto& icon : icons) {
-                            if (icon.name == "Info") { 
-                                coneIcon = icon.texture;
-                                break;
-                            }
-                        }
+                        coneIcon = getIconTexture("Info");
                         break;
                     case CONE_ID_BLUE:
-                        for (const auto& icon : icons) {
-                            if (icon.name == "Error") { 
-                                coneIcon = icon.texture;
-                                break;
-                            }
-                        }
+                        coneIcon = getIconTexture("Error");
                         break;
                     default:
                         break;
@@ -1254,7 +580,7 @@ int main(int argc, char **argv) {
             }
 
         }
-        ImGui::End(); // End of the fullscreen "ACR" window inside the if statement
+        ImGui::End(); // End of the fullscreen "ACR" window
 
         endFrame(window);
     }

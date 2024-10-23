@@ -1,9 +1,6 @@
 [submodule "external/gpslib"]
 	path = external/gpslib
 	url = git@github.com:eagletrt/gpslib.git
-[submodule "external/raylib"]
-	path = external/raylib
-	url = git@github.com:raysan5/raylib.git
 [submodule "imgui"]
 	path = external/imgui
 	url = git@github.com:ocornut/imgui.git
