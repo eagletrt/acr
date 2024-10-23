@@ -107,6 +107,7 @@ set(VIEWER_SOURCES
 )
 
 FILE(GLOB prova ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
+list(REMOVE_ITEM prova ${CMAKE_CURRENT_LIST_DIR}/src/main.cpp)
 add_library(prova_src STATIC ${prova})
 target_include_directories(prova_src PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}              
