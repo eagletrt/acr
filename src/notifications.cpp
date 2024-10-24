@@ -1,16 +1,20 @@
 #include "notifications.hpp"
-#include <imgui/imgui.h>
 #include "icon_manager.hpp"
+#include <imgui/imgui.h>
 
-std::vector<ActiveNotification> activeNotifications;
-std::mutex activeNotificationsMutex;
+// Constructor
+NotificationManager::NotificationManager(IconManager* iconManager)
+    : iconManager_(iconManager) {}
+
+// Destructor
+NotificationManager::~NotificationManager() {}
 
 // Function to show a popup notification
-void showPopup(const std::string& source, const std::string& title, const std::string& message, NotificationType type) {
-    std::lock_guard<std::mutex> lock(activeNotificationsMutex);
+void NotificationManager::showPopup(const std::string& source, const std::string& title, const std::string& message, NotificationType type) {
+    std::lock_guard<std::mutex> lock(activeNotificationsMutex_);
     // Check if a notification with the same source already exists
     bool found = false;
-    for (auto& notif : activeNotifications) {
+    for (auto& notif : activeNotifications_) {
         if (notif.source == source) {
             notif.elapsedTime = 0.0f; // Reset elapsed time
             found = true;
@@ -19,34 +23,33 @@ void showPopup(const std::string& source, const std::string& title, const std::s
     }
     if (!found) {
         // Remove all existing notifications
-        activeNotifications.clear();
+        activeNotifications_.clear();
         // Add the new notification with all members initialized
-        activeNotifications.emplace_back(ActiveNotification{ source, title, message, type, 2.0f, 0.0f });
+        activeNotifications_.emplace_back(ActiveNotification{ source, title, message, type, 2.0f, 0.0f });
     }
 }
 
-// Helper function to get icon based on notification type
-ImTextureID getIconForNotification(NotificationType type) {
+ImTextureID NotificationManager::getIconForNotification(NotificationType type) const {
     switch (type) {
         case NotificationType::Success:
-            return getIconTexture("Success");
+            return iconManager_->getIconTexture("Success");
         case NotificationType::Error:
-            return getIconTexture("Error");
+            return iconManager_->getIconTexture("Error");
         case NotificationType::Info:
         default:
-            return getIconTexture("Info");
+            return iconManager_->getIconTexture("Info");
     }
 }
 
 // Function to process and render active notifications
-void processNotifications(float deltaTime) {
-    std::lock_guard<std::mutex> lock(activeNotificationsMutex);
+void NotificationManager::processNotifications(float deltaTime) {
+    std::lock_guard<std::mutex> lock(activeNotificationsMutex_);
     int notificationIndex = 0;
     const int MAX_NOTIFICATIONS = 5; // Limit the maximum number of visible notifications
 
     // Remove excess notifications
-    if (activeNotifications.size() > MAX_NOTIFICATIONS) {
-        activeNotifications.erase(activeNotifications.begin(), activeNotifications.begin() + (activeNotifications.size() - MAX_NOTIFICATIONS));
+    if (activeNotifications_.size() > MAX_NOTIFICATIONS) {
+        activeNotifications_.erase(activeNotifications_.begin(), activeNotifications_.begin() + (activeNotifications_.size() - MAX_NOTIFICATIONS));
     }
 
     // Get the main viewport
@@ -58,10 +61,10 @@ void processNotifications(float deltaTime) {
     float notificationWidth = 300.0f;
     float notificationHeight = 60.0f;
 
-    for (auto it = activeNotifications.begin(); it != activeNotifications.end(); ) {
+    for (auto it = activeNotifications_.begin(); it != activeNotifications_.end(); ) {
         it->elapsedTime += deltaTime;
         if (it->elapsedTime >= it->displayDuration) {
-            it = activeNotifications.erase(it);
+            it = activeNotifications_.erase(it);
             continue;
         }
         // Calculate transparency for fade-in and fade-out effect

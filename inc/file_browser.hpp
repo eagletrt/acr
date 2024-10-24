@@ -1,21 +1,30 @@
-// file_browser.hpp
 #ifndef FILE_BROWSER_HPP
 #define FILE_BROWSER_HPP
 
 #include <string>
 #include <vector>
 #include <filesystem>
-#include "imgui.h" 
+#include "imgui.h"
+#include "notifications.hpp"
 
-extern bool showFileBrowser; // Indicates if the file browser should be shown
-extern std::string currentPath; // Current directory path
-extern std::vector<std::filesystem::directory_entry> entries; // Directory entries
-extern std::string selectedFile; // Currently selected file
+class FileBrowser {
+public:
+    FileBrowser(NotificationManager& notificationManager);
+    ~FileBrowser();
 
-// Function to render the file browser UI
-void renderFileBrowser();
+    void initialize();
 
-// Function to initialize file browser state
-void initializeFileBrowser();
+    void render();
 
-#endif // FILE_BROWSER_HPP
+    std::string getSelectedFile() const;
+
+private:
+    bool showFileBrowser_;
+    std::string currentPath_;
+    std::vector<std::filesystem::directory_entry> entries_;
+    std::string selectedFile_;
+
+    NotificationManager& notificationManager_;
+};
+
+#endif 

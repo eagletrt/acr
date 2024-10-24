@@ -4,10 +4,21 @@
 #include <iostream>
 #include "notifications.hpp"
 #include <algorithm>
+#include <cctype>
+#include <cstring>
 
-// Mutex to protect access to the cones vector
-extern std::mutex renderLock;
-extern std::vector<cone_t> cones;
+// Include necessary C headers
+extern "C" {
+    #include "defines.h"
+    #include "acr.h"
+    #include "utils.h"
+}
+// Constructor now initializes notificationManager_
+ConesLoader::ConesLoader(NotificationManager& notificationManager)
+    : notificationManager_(notificationManager) {}
+
+// Destructor
+ConesLoader::~ConesLoader() {}
 
 // Trimming function to remove white spaces
 static inline std::string trim(const std::string& s) {
@@ -27,10 +38,11 @@ static inline std::string trim(const std::string& s) {
 }
 
 // Function to load cones from a CSV file
-bool loadConesFromCSV(const std::string& filePath) {
+bool ConesLoader::loadFromCSV(const std::string& filePath) {
     std::ifstream file(filePath);
     if (!file.is_open()) {
         std::cerr << "Error opening CSV file: " << filePath << std::endl;
+        notificationManager_.showPopup("ConesLoader", "Error", "Failed to open CSV file.", NotificationType::Error);
         return false;
     }
 
@@ -38,10 +50,8 @@ bool loadConesFromCSV(const std::string& filePath) {
     int lineNumber = 0;
     std::vector<cone_t> loadedCones;
 
-    // Read and skip the header row
     if (std::getline(file, line)) {
         lineNumber++;
-        // Optionally, you can verify that the header row is correct
     }
 
     while (std::getline(file, line)) {
@@ -57,9 +67,9 @@ bool loadConesFromCSV(const std::string& filePath) {
             tokens.push_back(trim(token));
         }
 
-        // Ensure at least 5 fields (timestamp, cone_id, cone_name, lat, lon)
         if (tokens.size() < 5) {
             std::cerr << "Invalid format in CSV at line " << lineNumber << ": " << line << std::endl;
+            notificationManager_.showPopup("ConesLoader", "Error", "Invalid CSV format.", NotificationType::Error);
             continue;
         }
 
@@ -101,6 +111,7 @@ bool loadConesFromCSV(const std::string& filePath) {
 
         } catch (const std::exception& e) {
             std::cerr << "Error parsing CSV at line " << lineNumber << ": " << e.what() << std::endl;
+            notificationManager_.showPopup("ConesLoader", "Error", "CSV parsing error.", NotificationType::Error);
             continue;
         }
 
@@ -112,19 +123,28 @@ bool loadConesFromCSV(const std::string& filePath) {
 
     if (loadedCones.empty()) {
         std::cerr << "No valid cones loaded from CSV: " << filePath << std::endl;
+        notificationManager_.showPopup("ConesLoader", "Error", "No cones loaded from CSV.", NotificationType::Error);
         return false;
     }
 
     {
-        std::unique_lock<std::mutex> lck(renderLock);
-        cones.insert(cones.end(), loadedCones.begin(), loadedCones.end());
+        std::lock_guard<std::mutex> lock(conesMutex_);
+        cones_.insert(cones_.end(), loadedCones.begin(), loadedCones.end());
     }
 
+    notificationManager_.showPopup("ConesLoader", "Success", "Cones loaded successfully.", NotificationType::Success);
     return true;
 }
 
 // Function to clear all loaded cones
-void clearLoadedCones() {
-    std::unique_lock<std::mutex> lck(renderLock);
-    cones.clear();
+void ConesLoader::clearCones() {
+    std::lock_guard<std::mutex> lock(conesMutex_);
+    cones_.clear();
+    notificationManager_.showPopup("ConesLoader", "Cleared", "All cones have been cleared.", NotificationType::Info);
+}
+
+// Function to retrieve the loaded cones
+std::vector<cone_t> ConesLoader::getCones() const {
+    std::lock_guard<std::mutex> lock(conesMutex_);
+    return cones_;
 }

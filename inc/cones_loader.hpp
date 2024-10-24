@@ -1,4 +1,3 @@
-// cones_loader.hpp
 #ifndef CONES_LOADER_HPP
 #define CONES_LOADER_HPP
 
@@ -6,11 +5,28 @@
 #include <vector>
 #include <mutex>
 #include "map.hpp"  
+#include "notifications.hpp" 
 
-// Function to load cones from a CSV file
-bool loadConesFromCSV(const std::string& filePath);
+class ConesLoader {
+public:
+    ConesLoader(NotificationManager& notificationManager);
+    ~ConesLoader();
 
-// Optional: Function to clear all loaded cones
-void clearLoadedCones();
+    // Load cones from a CSV file
+    bool loadFromCSV(const std::string& filePath);
+
+    // Clear all loaded cones
+    void clearCones();
+
+    // Retrieve the loaded cones
+    std::vector<cone_t> getCones() const;
+
+private:
+    std::vector<cone_t> cones_;
+    mutable std::mutex conesMutex_;
+
+    // Reference to NotificationManager
+    NotificationManager& notificationManager_;
+};
 
 #endif // CONES_LOADER_HPP

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "imgui.h" 
+#include "notifications.hpp"
 
 // Structure for icon information
 struct IconInfo {
@@ -12,13 +13,23 @@ struct IconInfo {
     ImVec2 size;
 };
 
-// Function to load icons
-void loadIcons();
+class IconManager {
+public:
+    IconManager();
+    ~IconManager();
 
-// Function to get an icon texture by name
-ImTextureID getIconTexture(const std::string& name);
+    // Load icons
+    void loadIcons(NotificationManager& notificationManager);
 
-// Externally accessible icons vector
-extern std::vector<IconInfo> icons;
+    // Get icon texture by name
+    ImTextureID getIconTexture(const std::string& name) const;
+    
 
-#endif
+private:
+    std::vector<IconInfo> icons_;
+
+    // Helper function to load a PNG image
+    ImTextureID loadImagePNG(const char* path, NotificationManager& notificationManager);
+};
+
+#endif // ICON_MANAGER_HPP

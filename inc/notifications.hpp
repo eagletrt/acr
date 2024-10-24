@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 #include <mutex>
-#include "imgui/imgui.h"
+#include "imgui.h"
+
+class IconManager;
 
 enum class NotificationType {
     Info,
@@ -12,20 +14,33 @@ enum class NotificationType {
     Error
 };
 
-// Structure for active notifications
 struct ActiveNotification {
-    std::string source;          // Unique identifier for the notification
-    std::string title;           // Notification title
-    std::string message;         // Notification message
-    NotificationType type;       // Type of notification
-    float displayDuration;       // Duration in seconds
-    float elapsedTime;           // Elapsed time in seconds
+    std::string source;         
+    std::string title;           
+    std::string message;        
+    NotificationType type;     
+    float displayDuration;      
+    float elapsedTime;          
 };
 
-// Function to show a popup notification
-void showPopup(const std::string& source, const std::string& title, const std::string& message, NotificationType type);
+class NotificationManager {
+public:
+    // Constructor and Destructor
+    NotificationManager(IconManager* iconManager);
+    ~NotificationManager();
 
-// Function to process and render active notifications
-void processNotifications(float deltaTime);
+    // Show a popup notification
+    void showPopup(const std::string& source, const std::string& title, const std::string& message, NotificationType type);
 
-#endif
+    // Process and render active notifications
+    void processNotifications(float deltaTime);
+
+private:
+    std::vector<ActiveNotification> activeNotifications_;
+    std::mutex activeNotificationsMutex_;
+    IconManager* iconManager_;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+    ImTextureID getIconForNotification(NotificationType type) const;
+};
+
+#endif // NOTIFICATIONS_HPP

@@ -5,9 +5,10 @@
 #include <cstdio>
 #include "notifications.hpp"
 #include "implot.h"
+#include <GL/gl.h>
 
 // Function to set a custom ImGui theme
-void setCustomTheme() {
+static void setCustomTheme() {
     ImGuiStyle& style = ImGui::GetStyle();
 
     // Base colors
@@ -48,18 +49,33 @@ void setCustomTheme() {
     style.WindowPadding     = ImVec2(0.0f, 0.0f); // Removed padding for fullscreen
 }
 
+GUI::GUI()
+    : window_(nullptr) {}
+
+GUI::~GUI() {
+    // Cleanup ImGui and GLFW
+    if (window_) {
+        ImGui_ImplOpenGL2_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImPlot::DestroyContext();
+        ImGui::DestroyContext();
+        glfwDestroyWindow(window_);
+        glfwTerminate();
+    }
+}
+
 // Function to set up ImGui and create a GLFW window
-GLFWwindow *setupImGui() {
+bool GUI::setup() {
     if (!glfwInit())
-        return nullptr;
+        return false;
 
     // Create fullscreen window by passing the primary monitor
     GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
-    GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "ACR", nullptr, nullptr);
-    if (window == nullptr)
-        return nullptr;
-    glfwMakeContextCurrent(window);
+    window_ = glfwCreateWindow(mode->width, mode->height, "ACR", nullptr, nullptr);
+    if (window_ == nullptr)
+        return false;
+    glfwMakeContextCurrent(window_);
     glfwSwapInterval(1); // Enable vsync
     ImGui::CreateContext();
     ImPlot::CreateContext();
@@ -71,20 +87,14 @@ GLFWwindow *setupImGui() {
     // Apply custom theme
     setCustomTheme();
 
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL2_Init();
 
-    initializeFonts(io, "../assets/fonts/");
-
-    if (!availableFonts.empty()) {
-        io.FontDefault = availableFonts[selectedFontIndex].font;
-    }
-
-    return window;
+    return true;
 }
 
-// Function to start a new ImGui frame
-void startFrame() {
+// Start a new ImGui frame
+void GUI::startFrame() {
     glfwPollEvents();
 
     // Start the Dear ImGui frame
@@ -93,17 +103,40 @@ void startFrame() {
     ImGui::NewFrame();
 }
 
-// Function to render the ImGui frame and swap buffers
-void endFrame(GLFWwindow *window) {
+// Render the ImGui frame and swap buffers
+void GUI::endFrame() {
     ImGui::Render();
     int display_w, display_h;
-    glfwGetFramebufferSize(window, &display_w, &display_h);
+    glfwGetFramebufferSize(window_, &display_w, &display_h);
     glViewport(0, 0, display_w, display_h);
     glClearColor(0.10f, 0.10f, 0.10f, 1.00f); // Dark background
     glClear(GL_COLOR_BUFFER_BIT);
 
     ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
 
-    glfwMakeContextCurrent(window);
-    glfwSwapBuffers(window);
+    glfwMakeContextCurrent(window_);
+    glfwSwapBuffers(window_);
+}
+
+void GUI::cleanup() {
+    // Cleanup ImGui and GLFW
+    if (window_) {
+        ImGui_ImplOpenGL2_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImPlot::DestroyContext();
+        ImGui::DestroyContext();
+        glfwDestroyWindow(window_);
+        glfwTerminate();
+        window_ = nullptr; 
+    }
+}
+
+// Check if the window should close
+bool GUI::shouldClose() const {
+    return glfwWindowShouldClose(window_);
+}
+
+// Get the GLFW window
+GLFWwindow* GUI::getWindow() const {
+    return window_;
 }

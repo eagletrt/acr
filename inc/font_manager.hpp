@@ -3,7 +3,7 @@
 
 #include <string>
 #include <vector>
-#include "imgui/imgui.h"
+#include "imgui.h"
 
 // Structure for font information
 struct FontInfo {
@@ -11,13 +11,36 @@ struct FontInfo {
     ImFont* font;
 };
 
-// External variable declarations
-extern std::vector<FontInfo> availableFonts;
-extern int selectedFontIndex; // Index of the selected font
-extern float fontScale; 
+class FontManager {
+public:
+    FontManager();
+    ~FontManager();
 
-// Function declarations
-void loadFontsFromDirectory(ImGuiIO& io, const std::string& fontsDir);
-void initializeFonts(ImGuiIO& io, const std::string& fontsDir);
+    // Load fonts from directory
+    void loadFontsFromDirectory(ImGuiIO& io, const std::string& fontsDir);
+
+    // Initialize fonts
+    void initializeFonts(ImGuiIO& io, const std::string& fontsDir);
+
+    // Get available fonts
+    const std::vector<FontInfo>& getAvailableFonts() const;
+
+    // Get and set selected font index
+    int getSelectedFontIndex() const;
+    void setSelectedFontIndex(int index);
+
+    // Get and set font scale
+    float getFontScale() const;
+    void setFontScale(float scale);
+
+    // Get the selected font
+    ImFont* getSelectedFont() const;
+    float fontScale_ = 1.0f;
+
+private:
+    std::vector<FontInfo> availableFonts_;
+    int selectedFontIndex_;
+    
+};
 
 #endif // FONT_MANAGER_HPP

@@ -3,41 +3,57 @@
 
 #include <string>
 #include <vector>
-#include "imgui.h" 
-#include "implot.h" 
+#include "imgui.h"
+#include "implot.h"
+#include "notifications.hpp" 
 
-// Include the header where 'cone_t' is defined
 extern "C" {
     #include "defines.h"
     #include "acr.h"
 }
 
-// Structure for map information
 struct MapInfo {
-    std::string name;      // Name of the map
-    std::string filePath;  // Path to the image file
-    ImVec2 boundBL;        // Bottom-left boundary coordinates
-    ImVec2 boundTR;        // Top-right boundary coordinates
-    ImTextureID texture;   // Loaded texture ID
+    std::string name;     
+    std::string filePath;
+    ImVec2 boundBL;     
+    ImVec2 boundTR;        
+    ImTextureID texture;   
 };
 
-// Function to add a map
-void addMap(const std::string& name, const std::string& filePath, const ImVec2& boundBL, const ImVec2& boundTR);
+class MapManager {
+public:
+    MapManager(NotificationManager& notificationManager);
+    ~MapManager();
 
-// Function to load map textures
-void loadMapTextures();
+    // Add a map
+    void addMap(const std::string& name, const std::string& filePath, const ImVec2& boundBL, const ImVec2& boundTR);
 
-// Function to find the index of the closest cone to a point on the map
-int findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cones, float hitRadius);
+    // Load map textures
+    bool loadMapTextures();
 
-// Externally accessible maps vector
-extern std::vector<MapInfo> maps;
+    // Find the index of the closest cone to a point on the map
+    int findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cones, float hitRadius) const;
 
-// External variable for selected map
-extern int selectedMapIndex;
+    // Getters and setters for selected map
+    int getSelectedMapIndex() const;
+    void setSelectedMapIndex(int index);
 
-// Externally accessible variables for cone selection
-extern int selectedConeIndex;
-extern bool showConeContextMenu;
+    // Get maps
+    const std::vector<MapInfo>& getMaps() const;
 
-#endif
+    // Selected cone index and context menu flag (made public for simplicity)
+    int selectedConeIndex_;
+    bool showConeContextMenu_;
+    int selectedMapIndex_=0;
+
+private:
+    std::vector<MapInfo> maps_;
+    
+
+    NotificationManager& notificationManager_;
+
+    // Helper function to load a JPG image
+    ImTextureID loadImageJPG(const char *path);
+};
+
+#endif // MAP_HPP

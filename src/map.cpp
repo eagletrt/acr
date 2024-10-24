@@ -4,25 +4,31 @@
 #include <cmath>
 #include <cstdio>
 #include "notifications.hpp"
-#include "icon_manager.hpp"
 
-extern "C" {
-    #include "defines.h"
-    #include "acr.h"
+MapManager::MapManager(NotificationManager& notificationManager)
+    : selectedMapIndex_(0), selectedConeIndex_(-1), showConeContextMenu_(false),
+      notificationManager_(notificationManager) {}
+
+// Destructor
+MapManager::~MapManager() {
+    // Cleanup map textures
+    for (auto& map : maps_) {
+        if (map.texture != 0) {
+            GLuint texID = static_cast<GLuint>(reinterpret_cast<intptr_t>(map.texture));
+            glDeleteTextures(1, &texID);
+            map.texture = 0;
+        }
+    }
 }
-
-std::vector<MapInfo> maps;
-int selectedMapIndex = 0; // Index of the selected map
-
-int selectedConeIndex = -1;
-bool showConeContextMenu = false;
 
 // Function to add a map
-void addMap(const std::string& name, const std::string& filePath, const ImVec2& boundBL, const ImVec2& boundTR) {
-    maps.push_back(MapInfo{ name, filePath, boundBL, boundTR, 0 });
+void MapManager::addMap(const std::string& name, const std::string& filePath, const ImVec2& boundBL, const ImVec2& boundTR) {
+    maps_.push_back(MapInfo{ name, filePath, boundBL, boundTR, 0 });
+    printf("Added map: %s\n", name.c_str());
 }
 
-ImTextureID loadImageJPG(const char *path)
+// Helper function to load a JPG image
+ImTextureID MapManager::loadImageJPG(const char *path)
 {
     int width, height, channels;
     unsigned char *data = stbi_load(path, &width, &height, &channels, 4);
@@ -43,44 +49,67 @@ ImTextureID loadImageJPG(const char *path)
     return (ImTextureID)(intptr_t)tex;
 }
 
-void loadMapTextures() {
-    for (auto& map : maps) {
+bool MapManager::loadMapTextures() {
+    for (auto& map : maps_) {
         map.texture = loadImageJPG(map.filePath.c_str());
         if (map.texture == 0) {
             printf("Error loading map image: %s\n", map.filePath.c_str());
-            showPopup("Map_Error", "Error", "Unable to load map: " + map.name, NotificationType::Error);
-        }
-        else {
+            notificationManager_.showPopup("MapManager_Error", "Error", "Unable to load map: " + map.name, NotificationType::Error);
+        } else {
             printf("Map loaded successfully: %s\n", map.name.c_str());
         }
     }
 
     // Check if at least one map was loaded successfully
     bool anyMapLoaded = false;
-    for (const auto& map : maps) {
+    for (const auto& map : maps_) {
         if (map.texture != 0) {
             anyMapLoaded = true;
             break;
         }
     }
+
     if (!anyMapLoaded) {
         printf("Error: No map was loaded successfully.\n");
-        showPopup("Map_Error", "Error", "No map was loaded successfully.", NotificationType::Error);
+        notificationManager_.showPopup("MapManager_Error", "Error", "No map was loaded successfully.", NotificationType::Error);
+        return false;  // Return false since no maps were loaded
+    }
+    return true;  // Return true since at least one map was loaded
+}
+
+
+int MapManager::findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cones, float hitRadius) const {
+    int closestConeIndex = -1;
+    float minDistSq = hitRadius * hitRadius;
+
+    for (size_t i = 0; i < cones.size(); ++i) {
+        float dx = static_cast<float>(cones[i].lon - mousePos.x);
+        float dy = static_cast<float>(cones[i].lat - mousePos.y);
+        float distSq = dx * dx + dy * dy;
+        if (distSq < minDistSq) {
+            minDistSq = distSq;
+            closestConeIndex = static_cast<int>(i);
+        }
+    }
+    return closestConeIndex;
+}
+
+
+// Get selected map index
+int MapManager::getSelectedMapIndex() const {
+    return selectedMapIndex_;
+}
+
+// Set selected map index
+void MapManager::setSelectedMapIndex(int index) {
+    if (index >= 0 && index < static_cast<int>(maps_.size())) {
+        selectedMapIndex_ = index;
+        notificationManager_.showPopup("MapManager", "Map Selected", "You have selected the map: " + maps_[index].name, NotificationType::Success);
+        printf("Selected map: %s\n", maps_[index].name.c_str());
     }
 }
 
-// Function to find the index of the closest cone to a point on the map
-int findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cones, float hitRadius) {
-    int closestIndex = -1;
-    float closestDistance = hitRadius;  // Consider the cone only if it's within this radius
-
-    for (size_t i = 0; i < cones.size(); ++i) {
-        float distance = sqrtf(powf(mousePos.x - cones[i].lon, 2) + powf(mousePos.y - cones[i].lat, 2));
-        if (distance < closestDistance) {
-            closestIndex = static_cast<int>(i);
-            closestDistance = distance;
-        }
-    }
-
-    return closestIndex; 
+// Get all maps
+const std::vector<MapInfo>& MapManager::getMaps() const {
+    return maps_;
 }
