@@ -20,6 +20,8 @@ struct MapInfo {
     ImTextureID texture;   
 };
 
+class NotificationManager;
+
 class MapManager {
 public:
     MapManager(NotificationManager& notificationManager);
@@ -44,11 +46,10 @@ public:
     // Selected cone index and context menu flag (made public for simplicity)
     int selectedConeIndex_;
     bool showConeContextMenu_;
-    int selectedMapIndex_=0;
+    int selectedMapIndex_;
 
 private:
     std::vector<MapInfo> maps_;
-    
 
     NotificationManager& notificationManager_;
 
@@ -56,4 +57,4 @@ private:
     ImTextureID loadImageJPG(const char *path);
 };
 
-#endif // MAP_HPP
+#endif 

@@ -16,6 +16,8 @@ extern "C" {
     #include "utils.h"
 }
 
+class NotificationManager;
+
 class GPSManager {
 public:
     GPSManager(NotificationManager& notificationManager);
@@ -81,4 +83,4 @@ private:
     void readGPSLoop();
 };
 
-#endif // GPS_HPP
+#endif

@@ -28,7 +28,6 @@ GPSManager::~GPSManager() {
     stop();
 }
 
-// Implement the getGPSData() method
 gps_parsed_data_t GPSManager::getGPSData() const {
     std::lock_guard<std::mutex> lock(renderLock_);
     return gps_data_;
@@ -163,6 +162,9 @@ void GPSManager::readGPSLoop() {
                 }
                 count++;
             }
+            else if (match.message == GPS_UBX_TYPE_NAV_DOP) { 
+                std::lock_guard<std::mutex> lock(renderLock_);
+            }
         }
 
         if (session_.active) {
@@ -177,7 +179,6 @@ void GPSManager::readGPSLoop() {
             cone_session_write(&cone_session_, &cone_);
             cone_session_.file = tmp;
             cones_.push_back(cone_);
-            //notificationManager_.showPopup("GPSManager", "Cone Saved", "A new cone has been saved.", NotificationType::Info);
         }
     }
 }
@@ -219,6 +220,7 @@ std::mutex& GPSManager::getRenderLock() {
 cone_session_t& GPSManager::getConeSession() {
     return cone_session_;
 }
+
 void GPSManager::setConeId(cone_id id) {
     cone_.id = id;
 }

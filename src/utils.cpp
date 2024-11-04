@@ -3,6 +3,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <shlobj.h>
 #endif
 
 // Function to get the Desktop path

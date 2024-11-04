@@ -7,6 +7,8 @@
 #include "imgui.h"
 #include "notifications.hpp"
 
+class NotificationManager;
+
 class FileBrowser {
 public:
     FileBrowser(NotificationManager& notificationManager);
@@ -27,4 +29,4 @@ private:
     NotificationManager& notificationManager_;
 };
 
-#endif 
+#endif

@@ -32,4 +32,4 @@ private:
     ImTextureID loadImagePNG(const char* path, NotificationManager& notificationManager);
 };
 
-#endif // ICON_MANAGER_HPP
+#endif

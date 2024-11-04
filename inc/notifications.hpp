@@ -39,8 +39,8 @@ private:
     std::vector<ActiveNotification> activeNotifications_;
     std::mutex activeNotificationsMutex_;
     IconManager* iconManager_;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+
     ImTextureID getIconForNotification(NotificationType type) const;
 };
 
-#endif // NOTIFICATIONS_HPP
+#endif 

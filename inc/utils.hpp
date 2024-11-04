@@ -1,4 +1,3 @@
-// utils.hpp
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
@@ -9,4 +8,4 @@ public:
     static std::string getDesktopPath();
 };
 
-#endif // UTILS_HPP
+#endif 

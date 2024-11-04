@@ -2,17 +2,17 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
-#include "notifications.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include "notifications.hpp"
 
-// Include necessary C headers
 extern "C" {
     #include "defines.h"
     #include "acr.h"
     #include "utils.h"
 }
+
 // Constructor now initializes notificationManager_
 ConesLoader::ConesLoader(NotificationManager& notificationManager)
     : notificationManager_(notificationManager) {}
@@ -95,16 +95,14 @@ bool ConesLoader::loadFromCSV(const std::string& filePath) {
                     break;
             }
 
-            // Parse altitude if available
             if (tokens.size() >= 6) {
                 cone.alt = std::stof(tokens[5]);
             } else {
-                cone.alt = 0.0f; // Default value
+                cone.alt = 0.0f; 
             }
 
-            // Parse timestamp if necessary
             try {
-                cone.timestamp = std::stoul(tokens[0]); // Use stoul for larger integers
+                cone.timestamp = std::stoul(tokens[0]);
             } catch (...) {
                 cone.timestamp = 0.0f;
             }

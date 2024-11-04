@@ -7,6 +7,9 @@
 #include "map.hpp"  
 #include "notifications.hpp" 
 
+
+class NotificationManager;
+
 class ConesLoader {
 public:
     ConesLoader(NotificationManager& notificationManager);
@@ -29,4 +32,4 @@ private:
     NotificationManager& notificationManager_;
 };
 
-#endif // CONES_LOADER_HPP
+#endif 

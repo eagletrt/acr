@@ -12,14 +12,14 @@ FileBrowser::FileBrowser(NotificationManager& notificationManager)
 
 // Destructor
 FileBrowser::~FileBrowser() {}
-
 void FileBrowser::initialize() {
     showFileBrowser_ = true; 
-    currentPath_ = Utils::getDesktopPath(); // Initialize to the desktop path
+    currentPath_ = Utils::getDesktopPath(); 
     entries_.clear();
     selectedFile_.clear();
 }
-                                                                                
+
+// Render the file browser
 void FileBrowser::render() {
     if (!showFileBrowser_) return;
 
@@ -71,7 +71,6 @@ void FileBrowser::render() {
     if (!selectedFile_.empty()) {
         if (ImGui::Button("Load")) {
             printf("Selected file: %s\n", selectedFile_.c_str());
-
 
             notificationManager_.showPopup("FileBrowser_Load", "Success", "Successfully loaded log file.", NotificationType::Success);
 

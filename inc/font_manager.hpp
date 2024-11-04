@@ -35,12 +35,13 @@ public:
 
     // Get the selected font
     ImFont* getSelectedFont() const;
-    float fontScale_ = 1.0f;
+    float fontScale_;
 
 private:
     std::vector<FontInfo> availableFonts_;
     int selectedFontIndex_;
     
+    
 };
 
-#endif // FONT_MANAGER_HPP
+#endif 
