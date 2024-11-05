@@ -1,6 +1,7 @@
+// notifications.cpp
 #include "notifications.hpp"
-#include "icon_manager.hpp"
-#include <imgui/imgui.h>
+#include "icon_manager.hpp" // Include the full definition
+#include "imgui/imgui.h"
 
 // Constructor
 NotificationManager::NotificationManager(IconManager* iconManager)
@@ -29,6 +30,7 @@ void NotificationManager::showPopup(const std::string& source, const std::string
     }
 }
 
+// Function to get the appropriate icon for a notification type
 ImTextureID NotificationManager::getIconForNotification(NotificationType type) const {
     switch (type) {
         case NotificationType::Success:

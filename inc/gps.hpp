@@ -7,6 +7,7 @@
 #include <vector>
 #include "imgui.h"  
 #include "notifications.hpp" 
+#include "config.hpp"
 
 extern "C" {
     #include "gps_interface.h"
@@ -83,4 +84,4 @@ private:
     void readGPSLoop();
 };
 
-#endif
+#endif // GPS_HPP

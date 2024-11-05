@@ -1,3 +1,4 @@
+// notifications.hpp
 #ifndef NOTIFICATIONS_HPP
 #define NOTIFICATIONS_HPP
 
@@ -5,7 +6,9 @@
 #include <vector>
 #include <mutex>
 #include "imgui.h"
+#include "config.hpp"
 
+// Forward declaration
 class IconManager;
 
 enum class NotificationType {
@@ -43,4 +46,4 @@ private:
     ImTextureID getIconForNotification(NotificationType type) const;
 };
 
-#endif 
+#endif // NOTIFICATIONS_HPP

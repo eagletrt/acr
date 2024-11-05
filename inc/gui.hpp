@@ -4,43 +4,47 @@
 #include <GLFW/glfw3.h>
 #include "imgui.h"
 
-// Enumerazione per i temi disponibili
+// Enumeration for available themes
 enum class AppTheme {
     Dark,
     Blue,
     Light
 };
 
-// Dichiarazioni delle funzioni di tema e configurazione
+// Declarations for theme and configuration functions
 void ApplyTheme(AppTheme theme);
 bool LoadConfig(AppTheme& theme);
 bool SaveConfig(const AppTheme& theme);
 
+// Class for GUI management
 class GUI {
 public:
     GUI();
     ~GUI();
 
-    // Configura ImGui e crea una finestra GLFW
+    // Configure ImGui and create a GLFW window
     bool setup();
 
-    // Inizia un nuovo frame ImGui
+    // Start a new ImGui frame
     void startFrame();
 
-    // Renderizza il frame ImGui e scambia i buffer
+    // Render the ImGui frame and swap buffers
     void endFrame();
 
-    // Pulisce le risorse
+    // Clean up resources
     void cleanup();
 
-    // Verifica se la finestra deve chiudersi
+    // Check if the window should close
     bool shouldClose() const;
 
-    // Ottiene la finestra GLFW
+    // Get the GLFW window
     GLFWwindow* getWindow() const;
 
 private:
     GLFWwindow* window_;
 };
 
-#endif
+// Function to set ImPlot style based on theme
+void SetImPlotStyle(AppTheme theme);
+
+#endif // GUI_HPP

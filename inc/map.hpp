@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "notifications.hpp" 
+#include "config.hpp"
 
 extern "C" {
     #include "defines.h"
@@ -57,4 +58,4 @@ private:
     ImTextureID loadImageJPG(const char *path);
 };
 
-#endif 
+#endif // MAP_HPP

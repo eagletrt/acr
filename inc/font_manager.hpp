@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "imgui.h"
+#include "config.hpp"
 
 // Structure for font information
 struct FontInfo {
@@ -40,8 +41,6 @@ public:
 private:
     std::vector<FontInfo> availableFonts_;
     int selectedFontIndex_;
-    
-    
 };
 
-#endif 
+#endif // FONT_MANAGER_HPP

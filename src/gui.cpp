@@ -5,7 +5,9 @@
 #include <stdio.h>
 #include <fstream>
 #include <sstream>
+#include "config.hpp"
 
+// Function to set an enhanced theme
 static void setEnhancedTheme() {
     ImGuiStyle& style = ImGui::GetStyle();
     ImVec4* colors = style.Colors;
@@ -51,7 +53,6 @@ static void setEnhancedTheme() {
     colors[ImGuiCol_TableRowBg]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
     colors[ImGuiCol_TableRowBgAlt]        = ImVec4(1.00f, 1.00f, 1.00f, 0.07f);
     
-    
     style.WindowRounding     = 8.0f;
     style.FrameRounding      = 6.0f;
     style.ScrollbarRounding  = 12.0f;
@@ -68,7 +69,6 @@ GUI::GUI()
     : window_(nullptr) {}
 
 GUI::~GUI() {
-    
     cleanup();
 }
 
@@ -91,8 +91,8 @@ bool GUI::setup() {
     io.ConfigFlags |=
         ImGuiConfigFlags_NavEnableKeyboard; 
 
-    
-    
+    // Set enhanced theme
+    setEnhancedTheme();
 
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL2_Init();
@@ -143,7 +143,6 @@ bool GUI::shouldClose() const {
 GLFWwindow* GUI::getWindow() const {
     return window_;
 }
-
 
 void ApplyTheme(AppTheme theme) {
     ImGuiStyle& style = ImGui::GetStyle();
@@ -263,7 +262,6 @@ void ApplyTheme(AppTheme theme) {
     }
 
     
-    
     style.WindowRounding     = 8.0f;
     style.FrameRounding      = 6.0f;
     style.ScrollbarRounding  = 12.0f;
@@ -335,7 +333,7 @@ bool LoadConfig(AppTheme& theme) {
                 if (value == "Dark") {
                     theme = AppTheme::Dark;
                     themeSet = true;
-                } else if (value == "Azzurro") { 
+                } else if (value == "Blue") { 
                     theme = AppTheme::Blue;
                     themeSet = true;
                 } else if (value == "Light") {
@@ -377,4 +375,4 @@ bool SaveConfig(const AppTheme& theme) {
     configFile << "theme=" << themeStr << "\n";
     configFile.close();
     return true;
-} 
+}

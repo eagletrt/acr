@@ -9,6 +9,7 @@
 #include "defines.h"
 #include "main.h"
 #include "utils.h"
+#include "config.hpp"
 
 // Constructor
 GPSManager::GPSManager(NotificationManager& notificationManager)
@@ -46,7 +47,7 @@ int GPSManager::initialize(const char* port_or_file) {
             printf("Changing permissions on serial port: %s with command: %s\n",
                    port_or_file, buff);
             system(buff);
-            res = gps_interface_open(&gps_, port_or_file, B230400);
+            res = gps_interface_open(&gps_, port_or_file, GPS_DEFAULT_BAUDRATE);
         }
         else if (stat(port_or_file, &statbuf) == 0 && S_ISREG(statbuf.st_mode)) {
             // It's a regular file
@@ -221,11 +222,11 @@ cone_session_t& GPSManager::getConeSession() {
     return cone_session_;
 }
 
-void GPSManager::setConeId(cone_id id) {
-    cone_.id = id;
-}
-
 // Get session
 full_session_t& GPSManager::getSession() {
     return session_;
+}
+
+void GPSManager::setConeId(cone_id id) {
+    cone_.id = id;
 }

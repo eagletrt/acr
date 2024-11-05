@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include "notifications.hpp"
+#include "config.hpp"
 
 FontManager::FontManager()
     : selectedFontIndex_(0), fontScale_(1.0f) {}

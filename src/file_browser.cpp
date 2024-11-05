@@ -3,6 +3,7 @@
 #include "notifications.hpp"
 #include "gps.hpp"
 #include "utils.hpp"
+#include "config.hpp"
 #include <algorithm>
 #include <cstdio>
 
@@ -12,6 +13,7 @@ FileBrowser::FileBrowser(NotificationManager& notificationManager)
 
 // Destructor
 FileBrowser::~FileBrowser() {}
+
 void FileBrowser::initialize() {
     showFileBrowser_ = true; 
     currentPath_ = Utils::getDesktopPath(); 

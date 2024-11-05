@@ -6,7 +6,7 @@
 #include <mutex>
 #include "map.hpp"  
 #include "notifications.hpp" 
-
+#include "config.hpp"
 
 class NotificationManager;
 
@@ -32,4 +32,4 @@ private:
     NotificationManager& notificationManager_;
 };
 
-#endif 
+#endif // CONES_LOADER_HPP

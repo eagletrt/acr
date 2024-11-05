@@ -4,7 +4,10 @@
 #include <string>
 #include <vector>
 #include "imgui.h" 
-#include "notifications.hpp"
+#include "config.hpp"
+
+// Forward declaration
+class NotificationManager;
 
 // Structure for icon information
 struct IconInfo {
@@ -23,7 +26,6 @@ public:
 
     // Get icon texture by name
     ImTextureID getIconTexture(const std::string& name) const;
-    
 
 private:
     std::vector<IconInfo> icons_;
@@ -32,4 +34,4 @@ private:
     ImTextureID loadImagePNG(const char* path, NotificationManager& notificationManager);
 };
 
-#endif
+#endif // ICON_MANAGER_HPP

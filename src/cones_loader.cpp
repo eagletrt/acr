@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstring>
 #include "notifications.hpp"
+#include "config.hpp"
 
 extern "C" {
     #include "defines.h"

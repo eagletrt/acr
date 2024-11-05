@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include "notifications.hpp"
+#include "config.hpp"
 
 MapManager::MapManager(NotificationManager& notificationManager)
     : selectedMapIndex_(0), selectedConeIndex_(-1), showConeContextMenu_(false),
@@ -77,7 +78,6 @@ bool MapManager::loadMapTextures() {
     return true;  // Return true since at least one map was loaded
 }
 
-
 int MapManager::findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cones, float hitRadius) const {
     int closestConeIndex = -1;
     float minDistSq = hitRadius * hitRadius;
@@ -93,7 +93,6 @@ int MapManager::findClosestCone(const ImPlotPoint& mousePos, const std::vector<c
     }
     return closestConeIndex;
 }
-
 
 // Get selected map index
 int MapManager::getSelectedMapIndex() const {

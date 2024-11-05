@@ -4,6 +4,7 @@
 #include <GL/gl.h>
 #include <cstdio>
 #include "notifications.hpp"
+#include "config.hpp"
 
 // Constructor
 IconManager::IconManager() {}
@@ -26,7 +27,7 @@ ImTextureID IconManager::loadImagePNG(const char* path, NotificationManager& not
     unsigned char* data = stbi_load(path, &width, &height, &channels, 4);
     if (data == NULL) {
         printf("Error loading image: %s\n", path);
-        // Mostra una notifica di errore
+        // Show an error notification
         notificationManager.showPopup("IconManager", "Error", "Failed to load image: " + std::string(path), NotificationType::Error);
         return 0;
     }
@@ -37,28 +38,28 @@ ImTextureID IconManager::loadImagePNG(const char* path, NotificationManager& not
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    // Carica i dati dell'immagine nella texture
+    // Load image data into texture
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 
     stbi_image_free(data);
     return (ImTextureID)(intptr_t)tex;
 }
 
-// Funzione per caricare le icone
+// Function to load the icons
 void IconManager::loadIcons(NotificationManager& notificationManager) {
-    ImTextureID infoIcon = loadImagePNG("../assets/icons/info.png", notificationManager);
+    ImTextureID infoIcon = loadImagePNG(ICONS_DIR "info.png", notificationManager);
     if (infoIcon != 0) {
         icons_.push_back({ "Info", infoIcon, ImVec2(16, 16) });
         printf("Loaded icon: Info\n");
     }
 
-    ImTextureID successIcon = loadImagePNG("../assets/icons/success.png", notificationManager);
+    ImTextureID successIcon = loadImagePNG(ICONS_DIR "success.png", notificationManager);
     if (successIcon != 0) {
         icons_.push_back({ "Success", successIcon, ImVec2(16, 16) });
         printf("Loaded icon: Success\n");
     }
 
-    ImTextureID errorIcon = loadImagePNG("../assets/icons/error.png", notificationManager);
+    ImTextureID errorIcon = loadImagePNG(ICONS_DIR "error.png", notificationManager);
     if (errorIcon != 0) {
         icons_.push_back({ "Error", errorIcon, ImVec2(16, 16) });
         printf("Loaded icon: Error\n");

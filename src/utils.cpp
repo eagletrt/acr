@@ -1,5 +1,6 @@
 #include "utils.hpp"
 #include <cstdlib>
+#include "config.hpp"
 
 #ifdef _WIN32
 #include <windows.h>

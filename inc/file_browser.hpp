@@ -6,6 +6,7 @@
 #include <filesystem>
 #include "imgui.h"
 #include "notifications.hpp"
+#include "config.hpp"
 
 class NotificationManager;
 
@@ -29,4 +30,4 @@ private:
     NotificationManager& notificationManager_;
 };
 
-#endif
+#endif // FILE_BROWSER_HPP

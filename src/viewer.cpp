@@ -1,5 +1,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "gui.hpp"
+#include "config.hpp"
 #include <string.h>
 #include <atomic>
 #include <algorithm>
@@ -76,15 +77,15 @@ int main(int argc, char **argv) {
 
     FontManager fontManager;
     ImGuiIO& io = ImGui::GetIO();
-    fontManager.initializeFonts(io, "../assets/fonts/");
+    fontManager.initializeFonts(io, FONTS_DIR);
 
     MapManager mapManager(notificationManager);
     
-    mapManager.addMap("Povo", "../assets/Povo.jpg", ImVec2{11.148481543f, 46.065886358f}, ImVec2{11.151553543f, 46.068958358f});
-    mapManager.addMap("Vadena", "../assets/Vadena.jpg", ImVec2{11.309756609f, 46.430011962f}, ImVec2{11.316924609f, 46.438203962f});
-    mapManager.addMap("FSG", "../assets/FSG.jpg", ImVec2{8.558931763f, 49.323440890f}, ImVec2{8.595726757f, 49.335430701f});
-    mapManager.addMap("Ala", "../assets/Ala.jpg", ImVec2{11.010747213f, 45.784567764f}, ImVec2{11.013506837f, 45.787133634f});
-    mapManager.addMap("Varano", "../assets/Varano.jpg", ImVec2{10.013347233f, 44.677561879f}, ImVec2{10.031744730f, 44.684102509f});
+    mapManager.addMap("Povo", MAPS_DIR "Povo.jpg", ImVec2{11.148481543f, 46.065886358f}, ImVec2{11.151553543f, 46.068958358f});
+    mapManager.addMap("Vadena", MAPS_DIR "Vadena.jpg", ImVec2{11.309756609f, 46.430011962f}, ImVec2{11.316924609f, 46.438203962f});
+    mapManager.addMap("FSG", MAPS_DIR "FSG.jpg", ImVec2{8.558931763f, 49.323440890f}, ImVec2{8.595726757f, 49.335430701f});
+    mapManager.addMap("Ala", MAPS_DIR "Ala.jpg", ImVec2{11.010747213f, 45.784567764f}, ImVec2{11.013506837f, 45.787133634f});
+    mapManager.addMap("Varano", MAPS_DIR "Varano.jpg", ImVec2{10.013347233f, 44.677561879f}, ImVec2{10.031744730f, 44.684102509f});
 
     
     if (!mapManager.loadMapTextures()) {
@@ -103,8 +104,8 @@ int main(int argc, char **argv) {
             notificationManager.showPopup("GPS_Error", "Error", "Failed to initialize GPS with provided argument.", NotificationType::Error);
         }
     } else {
-        if (gpsManager.initialize("/dev/ttyACM0") == -1) { 
-            printf("Error: Failed to initialize GPS on default port /dev/ttyACM0.\n");
+        if (gpsManager.initialize(DEFAULT_GPS_PORT) == -1) { 
+            printf("Error: Failed to initialize GPS on default port %s.\n", DEFAULT_GPS_PORT);
             notificationManager.showPopup("GPS_Error", "Error", "Failed to initialize GPS on default port.", NotificationType::Error);
         }
     }
@@ -125,7 +126,7 @@ int main(int argc, char **argv) {
 
     
     static bool showGPSDialog = false;
-    static char serialPortInput[256] = "/dev/ttyACM0";
+    static char serialPortInput[256] = DEFAULT_GPS_PORT;
 
     
     AppTheme currentTheme = AppTheme::Dark; 
@@ -133,6 +134,7 @@ int main(int argc, char **argv) {
     
     LoadConfig(currentTheme);
     ApplyTheme(currentTheme); 
+    SetImPlotStyle(currentTheme);
 
     
     bool showTrajectory = true;
@@ -186,7 +188,7 @@ int main(int argc, char **argv) {
             if (ImGui::Button("Open GPS")) {
                 showGPSDialog = true;
                 
-                strcpy(serialPortInput, "/dev/ttyACM0");
+                strcpy(serialPortInput, DEFAULT_GPS_PORT);
                 ImGui::OpenPopup("Open GPS");
             }
             ImGui::SameLine();
@@ -421,6 +423,7 @@ int main(int argc, char **argv) {
                         if (ImGui::Combo("Select Theme", &selectedThemeIndex, themes, IM_ARRAYSIZE(themes))) {
                             currentTheme = static_cast<AppTheme>(selectedThemeIndex);
                             ApplyTheme(currentTheme);
+                            SetImPlotStyle(currentTheme);
                             notificationManager.showPopup("Theme", "Theme Changed", "The application theme has been updated.", NotificationType::Info);
                             
                             SaveConfig(currentTheme);
@@ -446,9 +449,12 @@ int main(int argc, char **argv) {
                             plotStyle.Colors[ImPlotCol_AxisGrid] = ImVec4(0.5f, 0.5f, 0.5f, 0.3f); 
 
                             
+                            // Imposta lo stile per HDOP (verde)
+                            ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 1.5f); // Verde
                             ImPlot::PlotLine("HDOP", timeValues.data(), hdopValues.data(), hdopValues.size());
 
-                            
+                            // Imposta lo stile per PDOP (rosso)
+                            ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 1.5f); // Rosso
                             ImPlot::PlotLine("PDOP", timeValues.data(), pdopValues.data(), pdopValues.size());
 
                             ImPlot::EndPlot();
@@ -658,7 +664,6 @@ int main(int argc, char **argv) {
                 }
 
                 
-                
                 if (coneVisibility.size() != cones.size()) {
                     coneVisibility.resize(cones.size(), BoolWrapper{true});
                 }
@@ -749,6 +754,7 @@ int main(int argc, char **argv) {
             
 
             
+            // Context Menu for Cone Modification
             if (mapManager.showConeContextMenu_ && 
                 mapManager.selectedConeIndex_ >= 0 && 
                 mapManager.selectedConeIndex_ < static_cast<int>(gpsManager.getCones().size())) {
