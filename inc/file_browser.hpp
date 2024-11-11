@@ -1,3 +1,4 @@
+
 #ifndef FILE_BROWSER_HPP
 #define FILE_BROWSER_HPP
 
@@ -30,4 +31,4 @@ private:
     NotificationManager& notificationManager_;
 };
 
-#endif // FILE_BROWSER_HPP
+#endif 

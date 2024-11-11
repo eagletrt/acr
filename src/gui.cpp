@@ -1,13 +1,45 @@
-#include "gui.hpp"
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl2.h>
-#include <implot.h>
-#include <stdio.h>
-#include <fstream>
-#include <sstream>
-#include "config.hpp"
 
-// Function to set an enhanced theme
+#include "gui.hpp"
+#include <string.h>
+#include <algorithm>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
+#include <thread>
+#include <vector>
+#include <queue> 
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>  
+#include "imgui/imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl2.h"
+#include "imgui_stdlib.h"
+#include "implot.h"
+#include "stb_image.h"
+#include "nfd.h"
+
+#include "gps.hpp"
+#include "file_browser.hpp"
+#include "notifications.hpp"
+#include "map.hpp"
+#include "font_manager.hpp"
+#include "icon_manager.hpp"
+#include "utils.hpp"
+#include "cones_loader.hpp"
+
+extern "C" {
+    #include "acr.h"
+    #include "defines.h"
+    #include "main.h"
+    #include "utils.h"
+}
+
+#include "notifications.hpp"
+#include "icon_manager.hpp"
+
+
 static void setEnhancedTheme() {
     ImGuiStyle& style = ImGui::GetStyle();
     ImVec4* colors = style.Colors;
@@ -91,7 +123,7 @@ bool GUI::setup() {
     io.ConfigFlags |=
         ImGuiConfigFlags_NavEnableKeyboard; 
 
-    // Set enhanced theme
+    
     setEnhancedTheme();
 
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
@@ -153,7 +185,6 @@ void ApplyTheme(AppTheme theme) {
             
             ImGui::StyleColorsDark();
 
-            
             colors[ImGuiCol_Button]               = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
             colors[ImGuiCol_ButtonHovered]        = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
             colors[ImGuiCol_ButtonActive]         = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
@@ -175,7 +206,6 @@ void ApplyTheme(AppTheme theme) {
             colors[ImGuiCol_TabUnfocused]         = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
             colors[ImGuiCol_TabUnfocusedActive]   = ImVec4(0.05f, 0.05f, 0.05f, 1.0f);
 
-            
             colors[ImGuiCol_Text]                 = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
             colors[ImGuiCol_TextDisabled]         = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
             colors[ImGuiCol_TextSelectedBg]       = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
@@ -185,12 +215,10 @@ void ApplyTheme(AppTheme theme) {
             
             ImGui::StyleColorsDark();
 
-            
             ImVec4 darkBlue = ImVec4(0.0f, 0.0f, 0.4f, 1.0f);        
             ImVec4 darkBlueHovered = ImVec4(0.0f, 0.0f, 0.5f, 1.0f); 
             ImVec4 darkBlueActive = ImVec4(0.0f, 0.0f, 0.6f, 1.0f);  
 
-            
             colors[ImGuiCol_Button]               = darkBlue;
             colors[ImGuiCol_ButtonHovered]        = darkBlueHovered;
             colors[ImGuiCol_ButtonActive]         = darkBlueActive;
@@ -212,21 +240,16 @@ void ApplyTheme(AppTheme theme) {
             colors[ImGuiCol_TabUnfocused]         = darkBlue;
             colors[ImGuiCol_TabUnfocusedActive]   = darkBlueActive;
 
-            
             colors[ImGuiCol_Text]                 = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
             colors[ImGuiCol_TextDisabled]         = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
             colors[ImGuiCol_TextSelectedBg]       = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
 
-            
-            
             break;
         }
         case AppTheme::Light: {
             
             ImGui::StyleColorsLight();
 
-            
-            
             ImVec4 white = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
             ImVec4 grayHovered = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
             ImVec4 grayActive = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
@@ -252,7 +275,6 @@ void ApplyTheme(AppTheme theme) {
             colors[ImGuiCol_TabUnfocused]         = white;
             colors[ImGuiCol_TabUnfocusedActive]   = grayActive;
 
-            
             colors[ImGuiCol_Text]                 = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
             colors[ImGuiCol_TextDisabled]         = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
             colors[ImGuiCol_TextSelectedBg]       = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
@@ -274,7 +296,6 @@ void ApplyTheme(AppTheme theme) {
     style.Alpha              = 1.0f; 
 }
 
-
 void SetImPlotStyle(AppTheme theme) {
     ImPlotStyle& plotStyle = ImPlot::GetStyle();
 
@@ -283,37 +304,34 @@ void SetImPlotStyle(AppTheme theme) {
 
     switch (theme) {
         case AppTheme::Dark:
-            
-            plotStyle.Colors[ImPlotCol_Line]        = ImVec4(0.0f, 0.0f, 0.6f, 1.0f);
-            plotStyle.Colors[ImPlotCol_Fill]        = ImVec4(0.0f, 0.0f, 0.6f, 0.5f);
+            plotStyle.Colors[ImPlotCol_Line]        = ImVec4(0.0f, 1.0f, 0.0f, 1.0f); 
+            plotStyle.Colors[ImPlotCol_Fill]        = ImVec4(0.0f, 1.0f, 0.0f, 0.3f);
             plotStyle.Colors[ImPlotCol_MarkerFill]  = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
             plotStyle.Colors[ImPlotCol_AxisGrid]    = ImVec4(0.5f, 0.5f, 0.5f, 0.3f);
             plotStyle.Colors[ImPlotCol_LegendBg]    = ImVec4(0.0f, 0.0f, 0.0f, 0.5f);
             plotStyle.Colors[ImPlotCol_TitleText]   = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
             break;
         case AppTheme::Blue:
-            
-            plotStyle.Colors[ImPlotCol_Line]        = ImVec4(0.0f, 0.0f, 0.6f, 1.0f);
-            plotStyle.Colors[ImPlotCol_Fill]        = ImVec4(0.0f, 0.0f, 0.6f, 0.5f);
+            plotStyle.Colors[ImPlotCol_Line]        = ImVec4(0.0f, 0.0f, 1.0f, 1.0f); 
+            plotStyle.Colors[ImPlotCol_Fill]        = ImVec4(0.0f, 0.0f, 1.0f, 0.3f);
             plotStyle.Colors[ImPlotCol_MarkerFill]  = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-            plotStyle.Colors[ImPlotCol_AxisGrid]    = ImVec4(0.5f, 0.5f, 0.5f, 0.3f);
+            plotStyle.Colors[ImPlotCol_AxisGrid]    = ImVec4(0.3f, 0.3f, 0.5f, 0.3f);
             plotStyle.Colors[ImPlotCol_LegendBg]    = ImVec4(0.0f, 0.0f, 0.0f, 0.5f);
             plotStyle.Colors[ImPlotCol_TitleText]   = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
             break;
         case AppTheme::Light:
-            
-            plotStyle.Colors[ImPlotCol_Line]        = ImVec4(0.0f, 0.0f, 0.6f, 1.0f);
-            plotStyle.Colors[ImPlotCol_Fill]        = ImVec4(0.0f, 0.0f, 0.6f, 0.5f);
-            plotStyle.Colors[ImPlotCol_MarkerFill]  = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            plotStyle.Colors[ImPlotCol_Line]        = ImVec4(0.0f, 0.8f, 0.0f, 1.0f); 
+            plotStyle.Colors[ImPlotCol_Fill]        = ImVec4(0.0f, 0.8f, 0.0f, 0.3f);
+            plotStyle.Colors[ImPlotCol_MarkerFill]  = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
             plotStyle.Colors[ImPlotCol_AxisGrid]    = ImVec4(0.8f, 0.8f, 0.8f, 0.3f);
-            plotStyle.Colors[ImPlotCol_LegendBg]    = ImVec4(0.0f, 0.0f, 0.0f, 0.5f);
-            plotStyle.Colors[ImPlotCol_TitleText]   = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            plotStyle.Colors[ImPlotCol_LegendBg]    = ImVec4(1.0f, 1.0f, 1.0f, 0.5f);
+            plotStyle.Colors[ImPlotCol_TitleText]   = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
             break;
     }
 
     
     plotStyle.LineWeight = 2.0f;
-    plotStyle.MarkerSize = 100.0f;
+    plotStyle.MarkerSize = 6.0f;
 }
 
 bool LoadConfig(AppTheme& theme) {
@@ -351,8 +369,6 @@ bool LoadConfig(AppTheme& theme) {
     return themeSet;
 }
 
-
-
 bool SaveConfig(const AppTheme& theme) {
     std::ofstream configFile("config.ini", std::ios::out | std::ios::trunc);
     if (!configFile.is_open()) {
@@ -376,3 +392,4 @@ bool SaveConfig(const AppTheme& theme) {
     configFile.close();
     return true;
 }
+

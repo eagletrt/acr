@@ -1,3 +1,4 @@
+
 #ifndef CONES_LOADER_HPP
 #define CONES_LOADER_HPP
 
@@ -5,31 +6,39 @@
 #include <vector>
 #include <mutex>
 #include "map.hpp"  
-#include "notifications.hpp" 
+#include "notifications.hpp"
 #include "config.hpp"
+
 
 class NotificationManager;
 
+
+struct ConeWithDescription {
+    cone_t cone;
+    std::string description;
+};
+
 class ConesLoader {
 public:
+    
     ConesLoader(NotificationManager& notificationManager);
     ~ConesLoader();
 
-    // Load cones from a CSV file
+    
     bool loadFromCSV(const std::string& filePath);
 
-    // Clear all loaded cones
+    
     void clearCones();
 
-    // Retrieve the loaded cones
-    std::vector<cone_t> getCones() const;
+    
+    std::vector<ConeWithDescription> getConesWithDescriptions() const;
 
 private:
-    std::vector<cone_t> cones_;
+    std::vector<ConeWithDescription> conesWithDescriptions_;
     mutable std::mutex conesMutex_;
 
-    // Reference to NotificationManager
+    
     NotificationManager& notificationManager_;
 };
 
-#endif // CONES_LOADER_HPP
+#endif 

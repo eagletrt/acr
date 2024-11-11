@@ -1,3 +1,4 @@
+
 #ifndef ICON_MANAGER_HPP
 #define ICON_MANAGER_HPP
 
@@ -6,10 +7,10 @@
 #include "imgui.h" 
 #include "config.hpp"
 
-// Forward declaration
+
 class NotificationManager;
 
-// Structure for icon information
+
 struct IconInfo {
     std::string name;
     ImTextureID texture;
@@ -21,17 +22,17 @@ public:
     IconManager();
     ~IconManager();
 
-    // Load icons
+    
     void loadIcons(NotificationManager& notificationManager);
 
-    // Get icon texture by name
+    
     ImTextureID getIconTexture(const std::string& name) const;
 
 private:
     std::vector<IconInfo> icons_;
 
-    // Helper function to load a PNG image
+    
     ImTextureID loadImagePNG(const char* path, NotificationManager& notificationManager);
 };
 
-#endif // ICON_MANAGER_HPP
+#endif 

@@ -1,3 +1,4 @@
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "gui.hpp"
 #include "config.hpp"
@@ -38,10 +39,20 @@ extern "C" {
 #include "utils.hpp"
 #include "cones_loader.hpp"
 
+#include "notifications.hpp"
+#include "icon_manager.hpp"
+
 
 struct BoolWrapper {
     bool value;
+
+    
+    BoolWrapper(bool val = true) : value(val) {}
 };
+
+
+extern void setEnhancedTheme();
+
 
 int main(int argc, char **argv) {
     
@@ -415,7 +426,7 @@ int main(int argc, char **argv) {
                         ImGui::Text("Font Scale: %.2f", fontManager.getFontScale());
                         io.FontGlobalScale = fontManager.getFontScale();
                     }
-
+                    
                     
                     if (ImGui::CollapsingHeader("Theme Settings")) {
                         const char* themes[] = { "Dark", "Blue", "Light" };
@@ -431,7 +442,18 @@ int main(int argc, char **argv) {
                         if (ImGui::IsItemHovered())
                             ImGui::SetTooltip("Choose a theme for the application.");
                     }
+
                     
+                    if (ImGui::CollapsingHeader("Reset Settings")) {
+                        if (ImGui::Button("Reset Trajectory and Cones")) {
+                            gpsManager.resetSessionData();
+                            conesLoader.clearCones();
+                            notificationManager.showPopup("Reset", "Reset", "Trajectory and cones have been reset.", NotificationType::Info);
+                            printf("Trajectory and cones have been reset.\n");
+                        }
+                        if (ImGui::IsItemHovered())
+                            ImGui::SetTooltip("Click to reset the trajectory and all loaded cones.");
+                    }
 
                     ImGui::EndTabItem();
                 }
@@ -449,12 +471,12 @@ int main(int argc, char **argv) {
                             plotStyle.Colors[ImPlotCol_AxisGrid] = ImVec4(0.5f, 0.5f, 0.5f, 0.3f); 
 
                             
-                            // Imposta lo stile per HDOP (verde)
-                            ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 1.5f); // Verde
+                            
+                            ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 1.5f); 
                             ImPlot::PlotLine("HDOP", timeValues.data(), hdopValues.data(), hdopValues.size());
 
-                            // Imposta lo stile per PDOP (rosso)
-                            ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 1.5f); // Rosso
+                            
+                            ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 1.5f); 
                             ImPlot::PlotLine("PDOP", timeValues.data(), pdopValues.data(), pdopValues.size());
 
                             ImPlot::EndPlot();
@@ -538,8 +560,8 @@ int main(int argc, char **argv) {
                     glfwSetWindowShouldClose(gui.getWindow(), true);
                 }
                 if (ImGui::IsKeyPressed(ImGuiKey_C)) {
-                    gpsManager.getTrajectory().clear();
-                    gpsManager.getCones().clear();
+                    gpsManager.resetSessionData();
+                    conesLoader.clearCones();
                     printf("Trajectory and cones cleared.\n");
                     notificationManager.showPopup("Cleared", "Cleared", "Trajectory and cones have been cleared.", NotificationType::Info);
                 }
@@ -651,7 +673,9 @@ int main(int argc, char **argv) {
                 
                 const auto& trajectory = gpsManager.getTrajectory();
                 if (showTrajectory && !trajectory.empty()) {
-                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 5, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+                    
+                    
+                    ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 2.0f); 
                     std::vector<float> trajX, trajY;
                     trajX.reserve(trajectory.size());
                     trajY.reserve(trajectory.size());
@@ -659,8 +683,8 @@ int main(int argc, char **argv) {
                         trajX.push_back(pos.x);
                         trajY.push_back(pos.y);
                     }
-                    ImPlot::PlotScatter("Trajectory", trajX.data(), trajY.data(),
-                                        static_cast<int>(trajX.size()), 0, 0, sizeof(float));
+                    ImPlot::PlotLine("Trajectory", trajX.data(), trajY.data(),
+                                    static_cast<int>(trajX.size()), 0, 0, sizeof(float));
                 }
 
                 
@@ -754,7 +778,7 @@ int main(int argc, char **argv) {
             
 
             
-            // Context Menu for Cone Modification
+            
             if (mapManager.showConeContextMenu_ && 
                 mapManager.selectedConeIndex_ >= 0 && 
                 mapManager.selectedConeIndex_ < static_cast<int>(gpsManager.getCones().size())) {
@@ -836,10 +860,6 @@ int main(int argc, char **argv) {
                 }
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Delete the selected cone.");
-
-
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Move the selected cone to a new position.");
 
                 ImGui::EndPopup();
             }

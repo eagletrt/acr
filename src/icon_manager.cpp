@@ -1,3 +1,4 @@
+
 #include "icon_manager.hpp"
 #include "stb_image.h"
 #include <GLFW/glfw3.h>
@@ -6,12 +7,12 @@
 #include "notifications.hpp"
 #include "config.hpp"
 
-// Constructor
+
 IconManager::IconManager() {}
 
-// Destructor
+
 IconManager::~IconManager() {
-    // Cleanup textures
+    
     for (auto& icon : icons_) {
         if (icon.texture != 0) {
             GLuint texID = static_cast<GLuint>(reinterpret_cast<intptr_t>(icon.texture));
@@ -21,13 +22,13 @@ IconManager::~IconManager() {
     }
 }
 
-// Helper function to load a PNG image
+
 ImTextureID IconManager::loadImagePNG(const char* path, NotificationManager& notificationManager) {
     int width, height, channels;
     unsigned char* data = stbi_load(path, &width, &height, &channels, 4);
     if (data == NULL) {
         printf("Error loading image: %s\n", path);
-        // Show an error notification
+        
         notificationManager.showPopup("IconManager", "Error", "Failed to load image: " + std::string(path), NotificationType::Error);
         return 0;
     }
@@ -38,14 +39,14 @@ ImTextureID IconManager::loadImagePNG(const char* path, NotificationManager& not
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    // Load image data into texture
+    
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 
     stbi_image_free(data);
     return (ImTextureID)(intptr_t)tex;
 }
 
-// Function to load the icons
+
 void IconManager::loadIcons(NotificationManager& notificationManager) {
     ImTextureID infoIcon = loadImagePNG(ICONS_DIR "info.png", notificationManager);
     if (infoIcon != 0) {
