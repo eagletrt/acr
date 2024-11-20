@@ -329,44 +329,55 @@ int main(int argc, char **argv) {
             ImGui::SameLine();
 
             if (ImGui::Button("Load Cones CSV")) {
-                nfdu8filteritem_t filterList[] = {
-                    { "CSV files", "csv" }  
-                };
-                size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
+    nfdu8filteritem_t filterList[] = {
+        { "CSV files", "csv" }  
+    };
+    size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
 
-                nfdopendialogu8args_t args = {0};
-                args.filterList = filterList;
-                args.filterCount = filterCount;
-                args.defaultPath = NULL; 
+    nfdopendialogu8args_t args = {0};
+    args.filterList = filterList;
+    args.filterCount = filterCount;
+    args.defaultPath = NULL; 
 
-                nfdu8char_t* outPath = nullptr;
+    nfdu8char_t* outPath = nullptr;
 
-                
-                nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+    // Open File Dialog
+    nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
 
-                if (result == NFD_OKAY && outPath != nullptr) {
-                    printf("Selected CSV file: %s\n", outPath);
+    if (result == NFD_OKAY && outPath != nullptr) {
+        printf("Selected CSV file: %s\n", outPath);
 
-                    
-                    if (conesLoader.loadFromCSV(outPath)) {
-                        notificationManager.showPopup("Cones_Loaded", "Success", "Successfully loaded cones from CSV.", NotificationType::Success);
-                        printf("Cones loaded from CSV: %s\n", outPath);
-                        resetView = true; 
-                    } else {
-                        notificationManager.showPopup("Cones_Load_Error", "Error", "Failed to load cones from the selected CSV file.", NotificationType::Error);
-                        printf("Failed to load cones from CSV: %s\n", outPath);
-                    }
+        std::vector<cone_t> loadedCones;
 
-                    
-                    NFD_FreePathU8(outPath);
-                }
-                else if (result == NFD_CANCEL) {
-                    printf("User canceled CSV file selection.\n");
-                }
-                else {
-                    printf("Error selecting CSV file: %s\n", NFD_GetError());
-                }
+        // Load Cones from CSV
+        if (conesLoader.loadFromCSV(outPath, loadedCones)) {
+            // Clear existing cones in gpsManager
+            gpsManager.clearCones();
+
+            // Add loaded cones to gpsManager
+            for (const auto& cone : loadedCones) {
+                gpsManager.addCone(cone);
             }
+
+            notificationManager.showPopup("Cones_Loaded", "Success", "Successfully loaded cones from CSV.", NotificationType::Success);
+            printf("Cones loaded from CSV: %s\n", outPath);
+            resetView = true; 
+        } else {
+            notificationManager.showPopup("Cones_Load_Error", "Error", "Failed to load cones from the selected CSV file.", NotificationType::Error);
+            printf("Failed to load cones from CSV: %s\n", outPath);
+        }
+
+        // Free the path allocated by NFD
+        NFD_FreePathU8(outPath);
+    }
+    else if (result == NFD_CANCEL) {
+        printf("User canceled CSV file selection.\n");
+    }
+    else {
+        printf("Error selecting CSV file: %s\n", NFD_GetError());
+    }
+}
+
 
             ImGui::EndGroup(); 
 
@@ -516,7 +527,7 @@ int main(int argc, char **argv) {
                     if (ImGui::CollapsingHeader("Reset Settings")) {
                         if (ImGui::Button("Reset Trajectory and Cones")) {
                             gpsManager.resetSessionData();
-                            conesLoader.clearCones();
+                            gpsManager.clearCones();
                             notificationManager.showPopup("Reset", "Reset", "Trajectory and cones have been reset.", NotificationType::Info);
                             printf("Trajectory and cones have been reset.\n");
                         }
@@ -636,7 +647,7 @@ int main(int argc, char **argv) {
                 
                 if (ImGui::IsKeyPressed(ImGuiKey_C)) {
                     gpsManager.resetSessionData();
-                    conesLoader.clearCones();
+                    gpsManager.clearCones();
                     notificationManager.showPopup("Cleared", "Cleared", "Trajectory and cones have been cleared.", NotificationType::Info);
                     printf("Trajectory and cones have been reset.\n");
                 }

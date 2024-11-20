@@ -230,3 +230,13 @@ full_session_t& GPSManager::getSession() {
 void GPSManager::setConeId(cone_id id) {
     cone_.id = id;
 }
+
+void GPSManager::clearCones() {
+    std::lock_guard<std::mutex> lock(renderLock_);
+    cones_.clear();
+}
+
+void GPSManager::addCone(const cone_t& cone) {
+    std::lock_guard<std::mutex> lock(renderLock_);
+    cones_.push_back(cone);
+}
