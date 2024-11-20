@@ -105,32 +105,38 @@ GUI::~GUI() {
 }
 
 bool GUI::setup() {
-    if (!glfwInit())
+    if (!glfwInit()) {
         return false;
+    }
 
     
-    GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
-    const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
-    window_ = glfwCreateWindow(mode->width, mode->height, "ACR", primaryMonitor, nullptr);
+    int windowWidth = 1280;
+    int windowHeight = 720;
+
+    
+    window_ = glfwCreateWindow(windowWidth, windowHeight, "ACR", nullptr, nullptr);
     if (window_ == nullptr)
         return false;
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(1); 
+
+    
     ImGui::CreateContext();
     ImPlot::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
-    io.ConfigFlags |=
-        ImGuiConfigFlags_NavEnableKeyboard; 
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; 
 
     
     setEnhancedTheme();
 
+    
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL2_Init();
 
     return true;
 }
+
 
 void GUI::startFrame() {
     glfwPollEvents();

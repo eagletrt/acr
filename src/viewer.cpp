@@ -1,4 +1,5 @@
 
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "gui.hpp"
 #include "config.hpp"
@@ -46,12 +47,86 @@ extern "C" {
 struct BoolWrapper {
     bool value;
 
-    
     BoolWrapper(bool val = true) : value(val) {}
 };
 
 
 extern void setEnhancedTheme();
+bool LoadConfig(AppTheme& theme, int& lastFontIndex) {
+    std::ifstream configFile("config.ini");
+    if (!configFile.is_open()) {
+        
+        theme = AppTheme::Dark;
+        lastFontIndex = 0;
+        return false;
+    }
+    std::string line;
+    bool themeSet = false;
+    bool fontSet = false;
+    while (std::getline(configFile, line)) {
+        std::istringstream iss(line);
+        std::string key, value;
+        if (std::getline(iss, key, '=') && std::getline(iss, value)) {
+            if (key == "theme") {
+                if (value == "Dark") {
+                    theme = AppTheme::Dark;
+                    themeSet = true;
+                } else if (value == "Blue") { 
+                    theme = AppTheme::Blue;
+                    themeSet = true;
+                } else if (value == "Light") {
+                    theme = AppTheme::Light;
+                    themeSet = true;
+                }
+            }
+            else if (key == "last_font") {
+                try {
+                    lastFontIndex = std::stoi(value);
+                    fontSet = true;
+                } catch (...) {
+                    lastFontIndex = 0;
+                }
+            }
+        }
+    }
+    configFile.close();
+    if (!themeSet) {
+        theme = AppTheme::Dark;
+    }
+    if (!fontSet) {
+        lastFontIndex = 0;
+    }
+    return themeSet && fontSet;
+}
+
+bool SaveConfig(const AppTheme& theme, int lastFontIndex) {
+    std::ofstream configFile("config.ini", std::ios::out | std::ios::trunc);
+    if (!configFile.is_open()) {
+        printf("Failed to open config file for writing.\n");
+        return false;
+    }
+    std::string themeStr;
+    switch (theme) {
+        case AppTheme::Dark:
+            themeStr = "Dark";
+            break;
+        case AppTheme::Blue:
+            themeStr = "Blue";
+            break;
+        case AppTheme::Light:
+            themeStr = "Light";
+            break;
+    }
+    configFile << "theme=" << themeStr << "\n";
+    configFile << "last_font=" << lastFontIndex << "\n";
+    configFile.close();
+    return true;
+}
+
+
+float CalculateDistance(float x1, float y1, float x2, float y2) {
+    return sqrtf((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2));
+}
 
 
 int main(int argc, char **argv) {
@@ -78,6 +153,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    
     IconManager iconManager;
 
     
@@ -86,11 +162,25 @@ int main(int argc, char **argv) {
     
     iconManager.loadIcons(notificationManager);
 
+    
     FontManager fontManager;
     ImGuiIO& io = ImGui::GetIO();
-    fontManager.initializeFonts(io, FONTS_DIR);
 
+    
+    AppTheme currentTheme = AppTheme::Dark;
+    int lastFontIndex = 0;
+    LoadConfig(currentTheme, lastFontIndex);
+
+    
+    fontManager.initializeFonts(io, FONTS_DIR, lastFontIndex);
+
+    
+    ApplyTheme(currentTheme); 
+    SetImPlotStyle(currentTheme);
+
+    
     MapManager mapManager(notificationManager);
+    
     
     mapManager.addMap("Povo", MAPS_DIR "Povo.jpg", ImVec2{11.148481543f, 46.065886358f}, ImVec2{11.151553543f, 46.068958358f});
     mapManager.addMap("Vadena", MAPS_DIR "Vadena.jpg", ImVec2{11.309756609f, 46.430011962f}, ImVec2{11.316924609f, 46.438203962f});
@@ -100,13 +190,14 @@ int main(int argc, char **argv) {
 
     
     if (!mapManager.loadMapTextures()) {
-        printf("Failed to load map textures.\n");
+        printf("Failed to load initial map textures.\n");
         return -1;
     }
 
     
     ConesLoader conesLoader(notificationManager);
 
+    
     GPSManager gpsManager(notificationManager);
     
     if (argc > 1) {
@@ -122,6 +213,7 @@ int main(int argc, char **argv) {
     }
     gpsManager.start();
 
+    
     FileBrowser fileBrowser(notificationManager);
 
     float mapOpacity = 0.5f;
@@ -140,14 +232,6 @@ int main(int argc, char **argv) {
     static char serialPortInput[256] = DEFAULT_GPS_PORT;
 
     
-    AppTheme currentTheme = AppTheme::Dark; 
-
-    
-    LoadConfig(currentTheme);
-    ApplyTheme(currentTheme); 
-    SetImPlotStyle(currentTheme);
-
-    
     bool showTrajectory = true;
     bool showCurrentPosition = true;
     std::vector<BoolWrapper> coneVisibility;
@@ -157,13 +241,12 @@ int main(int argc, char **argv) {
     ImVec2 lastPlotSize(0, 0);
 
     
-    bool plotRendered = false;
-    ImVec2 plotPos(0, 0), plotSize(0, 0);
-
-    
     bool isDragging = false;
     int draggedConeIndex = -1;
-    ImPlotPoint dragStartPos;
+
+    
+    bool dragStarted = false;
+    bool dragEnded = false;
 
     
     while (!gui.shouldClose()) {
@@ -172,39 +255,31 @@ int main(int argc, char **argv) {
         float deltaTime = currentTimeSec - lastTime;
         lastTime = currentTimeSec;
 
+        
         gui.startFrame();
 
         
         notificationManager.processNotifications(deltaTime);
 
         
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImVec2 viewportPos = viewport->Pos;
-        ImVec2 viewportSize = viewport->Size;
-
-        
-        ImGui::SetNextWindowPos(viewportPos);
-        ImGui::SetNextWindowSize(viewportSize);
+        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->Pos);
+        ImGui::SetNextWindowSize(ImGui::GetMainViewport()->Size);
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                                          ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground;
 
-        
         if (ImGui::Begin("ACR", nullptr, window_flags)) {
-
             
             ImGui::BeginGroup(); 
 
             
             if (ImGui::Button("Open GPS")) {
                 showGPSDialog = true;
-                
                 strcpy(serialPortInput, DEFAULT_GPS_PORT);
                 ImGui::OpenPopup("Open GPS");
             }
             ImGui::SameLine();
 
-            
             if (ImGui::Button("Load Log File")) {
                 nfdu8filteritem_t filterList[] = {
                     { "Log files", "log,txt" } 
@@ -236,11 +311,8 @@ int main(int argc, char **argv) {
                     } else {
                         
                         gpsManager.resetSessionData();
-
-                        
                         gpsManager.start();
 
-                        
                         notificationManager.showPopup("Success", "Success", "Successfully loaded log file.", NotificationType::Success);
                     }
 
@@ -256,21 +328,17 @@ int main(int argc, char **argv) {
             }
             ImGui::SameLine();
 
-            
             if (ImGui::Button("Load Cones CSV")) {
-                
                 nfdu8filteritem_t filterList[] = {
                     { "CSV files", "csv" }  
                 };
                 size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
 
-                
                 nfdopendialogu8args_t args = {0};
                 args.filterList = filterList;
                 args.filterCount = filterCount;
                 args.defaultPath = NULL; 
 
-                
                 nfdu8char_t* outPath = nullptr;
 
                 
@@ -310,7 +378,6 @@ int main(int argc, char **argv) {
                 if (ImGui::BeginPopupModal("Open GPS", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
                     ImGui::InputText("Serial Port", serialPortInput, sizeof(serialPortInput));
                     if (ImGui::Button("OK")) {
-                        
                         
                         gpsManager.stop();
 
@@ -412,6 +479,8 @@ int main(int argc, char **argv) {
                         
                         if (fontManager.getSelectedFontIndex() >= 0 && fontManager.getSelectedFontIndex() < static_cast<int>(fontManager.getAvailableFonts().size())) {
                             io.FontDefault = fontManager.getSelectedFont();
+                            
+                            SaveConfig(currentTheme, fontManager.getSelectedFontIndex());
                         }
 
                         
@@ -437,7 +506,7 @@ int main(int argc, char **argv) {
                             SetImPlotStyle(currentTheme);
                             notificationManager.showPopup("Theme", "Theme Changed", "The application theme has been updated.", NotificationType::Info);
                             
-                            SaveConfig(currentTheme);
+                            SaveConfig(currentTheme, fontManager.getSelectedFontIndex());
                         }
                         if (ImGui::IsItemHovered())
                             ImGui::SetTooltip("Choose a theme for the application.");
@@ -470,7 +539,6 @@ int main(int argc, char **argv) {
                             
                             plotStyle.Colors[ImPlotCol_AxisGrid] = ImVec4(0.5f, 0.5f, 0.5f, 0.3f); 
 
-                            
                             
                             ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 1.5f); 
                             ImPlot::PlotLine("HDOP", timeValues.data(), hdopValues.data(), hdopValues.size());
@@ -540,31 +608,40 @@ int main(int argc, char **argv) {
                         notificationManager.showPopup("Session", "Session Started", "Recording session started.", NotificationType::Info);
                     }
                 }
+
+                
                 if (ImGui::IsKeyPressed(ImGuiKey_O)) {
                     gpsManager.setConeId(CONE_ID_ORANGE);
                     gpsManager.saveCone_.store(true);
                     notificationManager.showPopup("Cone_Orange", "Cone Placed", "An orange cone has been placed.", NotificationType::Success);
                 }
+                
                 else if (ImGui::IsKeyPressed(ImGuiKey_Y)) {
                     gpsManager.setConeId(CONE_ID_YELLOW);
                     gpsManager.saveCone_.store(true);
                     notificationManager.showPopup("Cone_Yellow", "Cone Placed", "A yellow cone has been placed.", NotificationType::Success);
                 }
+                
                 else if (ImGui::IsKeyPressed(ImGuiKey_B)) {
                     gpsManager.setConeId(CONE_ID_BLUE);
                     gpsManager.saveCone_.store(true);
                     notificationManager.showPopup("Cone_Blue", "Cone Placed", "A blue cone has been placed.", NotificationType::Success);
                 }
 
+                
                 if (ImGui::IsKeyPressed(ImGuiKey_Q)) {
                     glfwSetWindowShouldClose(gui.getWindow(), true);
                 }
+
+                
                 if (ImGui::IsKeyPressed(ImGuiKey_C)) {
                     gpsManager.resetSessionData();
                     conesLoader.clearCones();
-                    printf("Trajectory and cones cleared.\n");
                     notificationManager.showPopup("Cleared", "Cleared", "Trajectory and cones have been cleared.", NotificationType::Info);
+                    printf("Trajectory and cones have been reset.\n");
                 }
+
+                
                 if (gpsManager.saveCone_.load() && gpsManager.getConeSession().active == 0) {
                     if (cone_session_setup(&gpsManager.getConeSession(), basepath) == -1) {
                         printf("Error: Cone session setup failed.\n");
@@ -585,12 +662,10 @@ int main(int argc, char **argv) {
                 ImGui::OpenPopup("Legend Popup");
             }
 
-            
             if (ImGui::BeginPopup("Legend Popup")) {
                 ImGui::Text("Legend Controls");
                 ImGui::Separator();
 
-                
                 ImGui::Checkbox("Trajectory", &showTrajectory);
                 ImGui::Checkbox("Current Position", &showCurrentPosition);
 
@@ -600,7 +675,6 @@ int main(int argc, char **argv) {
                         coneVisibility.resize(conesList.size(), BoolWrapper{true});
                     }
 
-                    
                     ImGui::BeginChild("ConesList", ImVec2(260, 80), true, ImGuiWindowFlags_NoScrollbar);
 
                     for (size_t i = 0; i < conesList.size(); ++i) {
@@ -619,18 +693,23 @@ int main(int argc, char **argv) {
             
             ImVec2 size = ImGui::GetContentRegionAvail();
 
-            plotRendered = false; 
+            bool plotRendered = false; 
 
+            
             if (ImPlot::BeginPlot("GpsPositions", size, ImPlotFlags_Equal | ImPlotFlags_NoTitle | ImPlotFlags_NoLegend )) {
                 plotRendered = true;
 
                 const MapInfo& selectedMap = mapManager.getMaps()[mapManager.getSelectedMapIndex()];
 
                 
-                float minLon = selectedMap.boundBL.x;
-                float maxLon = selectedMap.boundTR.x;
-                float minLat = selectedMap.boundBL.y;
-                float maxLat = selectedMap.boundTR.y;
+                float minLon, maxLon, minLat, maxLat;
+                {
+                    std::lock_guard<std::mutex> lock(mapManager.mapMutex_);
+                    minLon = selectedMap.boundBL.x;
+                    maxLon = selectedMap.boundTR.x;
+                    minLat = selectedMap.boundBL.y;
+                    maxLat = selectedMap.boundTR.y;
+                }
 
                 
                 auto& cones = gpsManager.getCones();
@@ -647,7 +726,6 @@ int main(int argc, char **argv) {
 
                 
                 if (resetView) {
-                    
                     ImPlot::SetupAxisLimits(ImAxis_X1, minLon - margin_x, maxLon + margin_x, ImPlotCond_Always);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, minLat - margin_y, maxLat + margin_y, ImPlotCond_Always);
                     resetView = false;
@@ -661,20 +739,21 @@ int main(int argc, char **argv) {
                 ImPlot::SetupLegend(ImPlotLocation_NorthEast);
 
                 
-                if (selectedMap.texture != 0) {
-                    ImPlot::PlotImage(selectedMap.name.c_str(), 
-                                      selectedMap.texture, 
-                                      ImPlotPoint(selectedMap.boundBL.x, selectedMap.boundBL.y), 
-                                      ImPlotPoint(selectedMap.boundTR.x, selectedMap.boundTR.y),
-                                      ImVec2(0, 0), ImVec2(1, 1), 
-                                      ImVec4(1, 1, 1, mapOpacity));
+                {
+                    std::lock_guard<std::mutex> lock(mapManager.mapMutex_);
+                    if (selectedMap.texture != 0) {
+                        ImPlot::PlotImage(selectedMap.name.c_str(), 
+                                          selectedMap.texture, 
+                                          ImPlotPoint(selectedMap.boundBL.x, selectedMap.boundBL.y), 
+                                          ImPlotPoint(selectedMap.boundTR.x, selectedMap.boundTR.y),
+                                          ImVec2(0, 0), ImVec2(1, 1), 
+                                          ImVec4(1, 1, 1, mapOpacity));
+                    }
                 }
 
                 
                 const auto& trajectory = gpsManager.getTrajectory();
                 if (showTrajectory && !trajectory.empty()) {
-                    
-                    
                     ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 2.0f); 
                     std::vector<float> trajX, trajY;
                     trajX.reserve(trajectory.size());
@@ -691,6 +770,71 @@ int main(int argc, char **argv) {
                 if (coneVisibility.size() != cones.size()) {
                     coneVisibility.resize(cones.size(), BoolWrapper{true});
                 }
+
+                
+                ImPlotPoint mousePos = ImPlot::GetPlotMousePos();
+                float hitRadius = 0.0001f; 
+                int closestConeIndex = -1;
+                float minDistance = FLT_MAX;
+
+                
+                for (size_t i = 0; i < cones.size(); ++i) {
+                    if (coneVisibility[i].value) {
+                        float distance = CalculateDistance(mousePos.x, mousePos.y, cones[i].lon, cones[i].lat);
+                        if (distance < hitRadius && distance < minDistance) {
+                            closestConeIndex = static_cast<int>(i);
+                            minDistance = distance;
+                        }
+                    }
+                }
+
+                
+                if (!isDragging && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
+                    if (closestConeIndex != -1) {
+                        
+                        isDragging = true;
+                        draggedConeIndex = closestConeIndex;
+                        printf("Started dragging Cone %d\n", draggedConeIndex);
+                        notificationManager.showPopup("Drag_Cone_Start", "Drag Started", "Dragging cone started.", NotificationType::Info);
+                        dragStarted = true;
+                        dragEnded = false;
+                    }
+                }
+
+                if (isDragging && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                    if (draggedConeIndex >= 0 && draggedConeIndex < static_cast<int>(cones.size())) {
+                        ImPlotPoint newPos = ImPlot::GetPlotMousePos();
+                        
+                        {
+                            
+                            std::lock_guard<std::mutex> lock(gpsManager.getRenderLock());
+                            gpsManager.getCones()[draggedConeIndex].lon = newPos.x;
+                            gpsManager.getCones()[draggedConeIndex].lat = newPos.y;
+                        }
+
+                        printf("Dragging Cone %d to Lon=%f, Lat=%f\n", draggedConeIndex, newPos.x, newPos.y);
+                    }
+                }
+
+                if (isDragging && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                    if (draggedConeIndex >= 0 && draggedConeIndex < static_cast<int>(cones.size())) {
+                        printf("Stopped dragging Cone %d\n", draggedConeIndex);
+                        notificationManager.showPopup("Drag_Cone_End", "Drag Completed", "Cone moved successfully.", NotificationType::Success);
+                    }
+                    isDragging = false;
+                    draggedConeIndex = -1;
+                    dragEnded = true;
+                }
+
+                
+                if (ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                    if (closestConeIndex != -1 && coneVisibility[closestConeIndex].value) {
+                        mapManager.selectedConeIndex_ = closestConeIndex;  
+                        mapManager.showConeContextMenu_ = true;            
+                    }
+                }
+
+                
                 for (size_t i = 0; i < cones.size(); ++i) {
                     if (coneVisibility[i].value) {
                         ImVec4 color;
@@ -708,60 +852,20 @@ int main(int argc, char **argv) {
                                 color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
                                 break;
                         }
+
+                        
+                        if (isDragging && static_cast<int>(i) == draggedConeIndex) {
+                            color = ImVec4(1.0f, 0.0f, 1.0f, 1.0f); 
+                        }
+
+                        
+                        std::string coneLabel = "Cone" + std::to_string(i);
+
+                        
                         ImPlot::SetNextMarkerStyle(ImPlotMarker_Up, 8, color, 0.0f);
-                        ImPlot::PlotScatter(("Cone" + std::to_string(i)).c_str(), &cones[i].lon, &cones[i].lat, 1);
-                    }
-                }
 
-                
-                if (!isDragging && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
-                    ImPlotPoint mousePos = ImPlot::GetPlotMousePos();
-                    float hitRadius = 0.001f;  
-
-                    
-                    int closestConeIndex = mapManager.findClosestCone(mousePos, cones, hitRadius);
-
-                    if (closestConeIndex != -1 && coneVisibility[closestConeIndex].value) {
-                        isDragging = true;
-                        draggedConeIndex = closestConeIndex;
-                        dragStartPos = mousePos;
-                        printf("Started dragging Cone %d\n", draggedConeIndex);
-                        notificationManager.showPopup("Drag_Cone", "Drag Cone", "Dragging cone started.", NotificationType::Info);
-                    }
-                }
-
-                if (isDragging && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                    if (draggedConeIndex >= 0 && draggedConeIndex < static_cast<int>(cones.size())) {
-                        ImPlotPoint newPos = ImPlot::GetPlotMousePos();
                         
-                        cones[draggedConeIndex].lon = newPos.x;
-                        cones[draggedConeIndex].lat = newPos.y;
-                        printf("Dragging Cone %d to Lon=%f, Lat=%f\n", draggedConeIndex, newPos.x, newPos.y);
-                        
-                        notificationManager.showPopup("Drag_Cone", "Dragging in Progress", "Dragging cone in progress.", NotificationType::Info);
-                    }
-                }
-
-                if (isDragging && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-                    if (draggedConeIndex >= 0 && draggedConeIndex < static_cast<int>(cones.size())) {
-                        printf("Stopped dragging Cone %d\n", draggedConeIndex);
-                        notificationManager.showPopup("Drag_Cone", "Drag Completed", "Cone moved successfully.", NotificationType::Success);
-                    }
-                    isDragging = false;
-                    draggedConeIndex = -1;
-                }
-
-                
-                if (ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-                    ImPlotPoint mousePos = ImPlot::GetPlotMousePos();
-                    float hitRadius = 0.001f;  
-
-                    
-                    int closestConeIndex = mapManager.findClosestCone(mousePos, cones, hitRadius);
-
-                    if (closestConeIndex != -1 && coneVisibility[closestConeIndex].value) {
-                        mapManager.selectedConeIndex_ = closestConeIndex;  
-                        mapManager.showConeContextMenu_ = true;            
+                        ImPlot::PlotScatter(coneLabel.c_str(), &cones[i].lon, &cones[i].lat, 1);
                     }
                 }
 
@@ -775,9 +879,6 @@ int main(int argc, char **argv) {
                 ImPlot::EndPlot();
             }
 
-            
-
-            
             
             if (mapManager.showConeContextMenu_ && 
                 mapManager.selectedConeIndex_ >= 0 && 
@@ -804,6 +905,7 @@ int main(int argc, char **argv) {
                         break;
                 }
 
+                
                 if (coneIcon != 0) {
                     ImGui::Image(coneIcon, ImVec2(24, 24));
                     ImGui::SameLine();
@@ -865,7 +967,6 @@ int main(int argc, char **argv) {
             }
 
             ImGui::End(); 
-            
         }
 
         
@@ -873,7 +974,9 @@ int main(int argc, char **argv) {
     }
 
     
-    SaveConfig(currentTheme);
+    SaveConfig(currentTheme, fontManager.getSelectedFontIndex());
+
+    
     gpsManager.stop();
     gui.cleanup();
     NFD_Quit();

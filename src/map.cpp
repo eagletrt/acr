@@ -1,18 +1,22 @@
+
 #include "map.hpp"
 #include "stb_image.h"
 #include <GL/gl.h>
 #include <cmath>
 #include <cstdio>
+#include <thread>
+#include <mutex>
 #include "notifications.hpp"
 #include "config.hpp"
+#include <iostream>
 
 MapManager::MapManager(NotificationManager& notificationManager)
     : selectedMapIndex_(0), selectedConeIndex_(-1), showConeContextMenu_(false),
       notificationManager_(notificationManager) {}
 
-// Destructor
 MapManager::~MapManager() {
-    // Cleanup map textures
+    
+    std::lock_guard<std::mutex> lock(mapMutex_);
     for (auto& map : maps_) {
         if (map.texture != 0) {
             GLuint texID = static_cast<GLuint>(reinterpret_cast<intptr_t>(map.texture));
@@ -22,19 +26,18 @@ MapManager::~MapManager() {
     }
 }
 
-// Function to add a map
 void MapManager::addMap(const std::string& name, const std::string& filePath, const ImVec2& boundBL, const ImVec2& boundTR) {
+    std::lock_guard<std::mutex> lock(mapMutex_);
     maps_.push_back(MapInfo{ name, filePath, boundBL, boundTR, 0 });
-    printf("Added map: %s\n", name.c_str());
+    std::cout << "Added map: " << name << std::endl;
 }
 
-// Helper function to load a JPG image
 ImTextureID MapManager::loadImageJPG(const char *path)
 {
     int width, height, channels;
     unsigned char *data = stbi_load(path, &width, &height, &channels, 4);
     if (data == NULL) {
-        printf("Error loading image: %s\n", path);
+        std::cerr << "Error loading image: " << path << std::endl;
         return 0;
     }
     GLuint tex;
@@ -51,31 +54,58 @@ ImTextureID MapManager::loadImageJPG(const char *path)
 }
 
 bool MapManager::loadMapTextures() {
-    for (auto& map : maps_) {
-        map.texture = loadImageJPG(map.filePath.c_str());
-        if (map.texture == 0) {
-            printf("Error loading map image: %s\n", map.filePath.c_str());
-            notificationManager_.showPopup("MapManager_Error", "Error", "Unable to load map: " + map.name, NotificationType::Error);
-        } else {
-            printf("Map loaded successfully: %s\n", map.name.c_str());
+    
+    {
+        std::lock_guard<std::mutex> lock(mapMutex_);
+        if (!maps_.empty()) {
+            MapInfo& firstMap = maps_[0];
+            firstMap.texture = loadImageJPG(firstMap.filePath.c_str());
+            if (firstMap.texture == 0) {
+                std::cerr << "Error loading first map image: " << firstMap.filePath << std::endl;
+                notificationManager_.showPopup("MapManager_Error", "Error", "Unable to load first map: " + firstMap.name, NotificationType::Error);
+                
+            }
+            else {
+                std::cout << "First map loaded successfully: " << firstMap.name << std::endl;
+            }
+        }
+        else {
+            std::cerr << "No maps to load." << std::endl;
+            return false;
         }
     }
 
-    // Check if at least one map was loaded successfully
-    bool anyMapLoaded = false;
-    for (const auto& map : maps_) {
-        if (map.texture != 0) {
-            anyMapLoaded = true;
-            break;
+    
+    std::thread asyncMapLoader([this]() {
+        for (size_t i = 1; i < maps_.size(); ++i) { 
+            ImTextureID tex = loadImageJPG(maps_[i].filePath.c_str());
+            {
+                std::lock_guard<std::mutex> lock(mapMutex_);
+                maps_[i].texture = tex;
+            }
+            if (tex == 0) {
+                std::cerr << "Error loading map image asynchronously: " << maps_[i].filePath << std::endl;
+                notificationManager_.showPopup("MapManager_Error", "Error", "Unable to load map: " + maps_[i].name, NotificationType::Error);
+            }
+            else {
+                std::cout << "Map loaded asynchronously: " << maps_[i].name << std::endl;
+                notificationManager_.showPopup("MapManager", "Map Loaded", "Map loaded: " + maps_[i].name, NotificationType::Success);
+            }
+        }
+    });
+    asyncMapLoader.detach(); 
+
+    
+    {
+        std::lock_guard<std::mutex> lock(mapMutex_);
+        if (!maps_.empty() && maps_[0].texture != 0) {
+            return true;
+        }
+        else {
+            std::cerr << "Error: First map was not loaded successfully." << std::endl;
+            return false;
         }
     }
-
-    if (!anyMapLoaded) {
-        printf("Error: No map was loaded successfully.\n");
-        notificationManager_.showPopup("MapManager_Error", "Error", "No map was loaded successfully.", NotificationType::Error);
-        return false;  // Return false since no maps were loaded
-    }
-    return true;  // Return true since at least one map was loaded
 }
 
 int MapManager::findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cones, float hitRadius) const {
@@ -94,21 +124,19 @@ int MapManager::findClosestCone(const ImPlotPoint& mousePos, const std::vector<c
     return closestConeIndex;
 }
 
-// Get selected map index
 int MapManager::getSelectedMapIndex() const {
     return selectedMapIndex_;
 }
 
-// Set selected map index
 void MapManager::setSelectedMapIndex(int index) {
+    std::lock_guard<std::mutex> lock(mapMutex_);
     if (index >= 0 && index < static_cast<int>(maps_.size())) {
         selectedMapIndex_ = index;
         notificationManager_.showPopup("MapManager", "Map Selected", "You have selected the map: " + maps_[index].name, NotificationType::Success);
-        printf("Selected map: %s\n", maps_[index].name.c_str());
+        std::cout << "Selected map: " << maps_[index].name << std::endl;
     }
 }
 
-// Get all maps
 const std::vector<MapInfo>& MapManager::getMaps() const {
     return maps_;
 }
