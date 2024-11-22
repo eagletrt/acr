@@ -64,6 +64,7 @@ public:
     void clearCones();
     void addCone(const cone_t& cone);
     mutable std::mutex renderLock_;
+    int initializeSessions(const std::string& logDir);
 
 private:
     std::atomic<bool> kill_thread_;

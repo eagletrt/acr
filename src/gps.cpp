@@ -11,7 +11,7 @@
 #include "utils.h"
 #include "config.hpp"
 
-// Constructor
+
 GPSManager::GPSManager(NotificationManager& notificationManager)
     : kill_thread_(false), saveCone_(false), conePlacementMode_(false),
       currentPosition_(0.0f, 0.0f), notificationManager_(notificationManager) {
@@ -24,7 +24,7 @@ GPSManager::GPSManager(NotificationManager& notificationManager)
     user_data_.cone_session = &cone_session_;
 }
 
-// Destructor
+
 GPSManager::~GPSManager() {
     stop();
 }
@@ -34,14 +34,14 @@ gps_parsed_data_t GPSManager::getGPSData() const {
     return gps_data_;
 }
 
-// Function to initialize GPS interface
+
 int GPSManager::initialize(const char* port_or_file) {
     int res = 0;
     gps_interface_initialize(&gps_);
     if (port_or_file) {
         struct stat statbuf;
         if (stat(port_or_file, &statbuf) == 0 && S_ISCHR(statbuf.st_mode)) {
-            // It's a character device (serial port)
+            
             char buff[255];
             snprintf(buff, sizeof(buff), "sudo chmod 777 %s", port_or_file);
             printf("Changing permissions on serial port: %s with command: %s\n",
@@ -50,7 +50,7 @@ int GPSManager::initialize(const char* port_or_file) {
             res = gps_interface_open(&gps_, port_or_file, GPS_DEFAULT_BAUDRATE);
         }
         else if (stat(port_or_file, &statbuf) == 0 && S_ISREG(statbuf.st_mode)) {
-            // It's a regular file
+            
             printf("Opening file: %s\n", port_or_file);
             res = gps_interface_open_file(&gps_, port_or_file);
         }
@@ -73,14 +73,14 @@ void GPSManager::deleteCone(int index) {
     }
 }
 
-// Start GPS reading thread
+
 void GPSManager::start() {
     if (gpsThread_.joinable()) return;
     kill_thread_.store(false);
     gpsThread_ = std::thread(&GPSManager::readGPSLoop, this);
 }
 
-// Stop GPS reading thread
+
 void GPSManager::stop() {
     kill_thread_.store(true);
     if (gpsThread_.joinable()) {
@@ -89,22 +89,22 @@ void GPSManager::stop() {
     gps_interface_close(&gps_);
 }
 
-// Reset session data
+
 void GPSManager::resetSessionData() {
     std::lock_guard<std::mutex> lock(renderLock_);
     memset(&session_, 0, sizeof(full_session_t));
     memset(&cone_session_, 0, sizeof(cone_session_t));
     memset(&user_data_, 0, sizeof(user_data_t));
-    user_data_.basepath = user_data_.basepath; // Retain basepath
+    user_data_.basepath = user_data_.basepath; 
     user_data_.cone = &cone_;
     user_data_.session = &session_;
     user_data_.cone_session = &cone_session_;
     trajectory_.clear();
     cones_.clear();
-    currentPosition_ = ImVec2(0.0f, 0.0f); // Reset current GPS position
+    currentPosition_ = ImVec2(0.0f, 0.0f); 
 }
 
-// Function to read GPS data in a separate thread
+
 void GPSManager::readGPSLoop() {
     int fail_count = 0;
     int res = 0;
@@ -184,12 +184,12 @@ void GPSManager::readGPSLoop() {
     }
 }
 
-// Retrieve current GPS position
+
 ImVec2 GPSManager::getCurrentPosition() const {
     return currentPosition_;
 }
 
-// Retrieve trajectory
+
 std::vector<ImVec2> GPSManager::getTrajectory() const {
     return trajectory_;
 }
@@ -198,17 +198,17 @@ std::vector<cone_t>& GPSManager::getCones() {
     return cones_;
 }
 
-// Set cone placement mode
+
 void GPSManager::setConePlacementMode(bool mode) {
     conePlacementMode_ = mode;
 }
 
-// Get cone placement mode
+
 bool GPSManager::getConePlacementMode() const {
     return conePlacementMode_;
 }
 
-// Get GPS serial port
+
 gps_serial_port& GPSManager::getGPS() {
     return gps_;
 }
@@ -217,12 +217,12 @@ std::mutex& GPSManager::getRenderLock() {
     return renderLock_;
 }
 
-// Get cone session
+
 cone_session_t& GPSManager::getConeSession() {
     return cone_session_;
 }
 
-// Get session
+
 full_session_t& GPSManager::getSession() {
     return session_;
 }
@@ -239,4 +239,30 @@ void GPSManager::clearCones() {
 void GPSManager::addCone(const cone_t& cone) {
     std::lock_guard<std::mutex> lock(renderLock_);
     cones_.push_back(cone);
+}
+
+
+int GPSManager::initializeSessions(const std::string& logDir) {
+    
+    struct stat st = {0};
+    if (stat(logDir.c_str(), &st) == -1) {
+        if (mkdir(logDir.c_str(), 0700) != 0) {
+            printf("Errore nella creazione della directory di log %s\n", logDir.c_str());
+            return -1;
+        }
+    }
+
+    
+    if (csv_session_setup(&session_, logDir.c_str()) == -1) {
+        printf("Errore: Impostazione della sessione fallita.\n");
+        return -1;
+    }
+
+    
+    
+        
+        
+    
+
+    return 0;
 }

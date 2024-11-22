@@ -5,7 +5,7 @@
 #define ASSETS_DIR "../assets/"
 #define ICONS_DIR ASSETS_DIR "icons/"
 #define FONTS_DIR ASSETS_DIR "fonts/"
-#define MAPS_DIR ASSETS_DIR
+#define MAPS_DIR ASSETS_DIR 
 
 // GPS Configuration
 #ifndef DEFAULT_GPS_PORT

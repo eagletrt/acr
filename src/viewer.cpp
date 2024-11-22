@@ -23,6 +23,7 @@
 #include "implot.h"
 #include "stb_image.h"
 #include "nfd.h"
+#include <future>
 
 extern "C" {
     #include "acr.h"
@@ -32,7 +33,6 @@ extern "C" {
 }
 
 #include "gps.hpp"
-#include "file_browser.hpp"
 #include "notifications.hpp"
 #include "map.hpp"
 #include "font_manager.hpp"
@@ -136,6 +136,16 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    std::future<std::string> fileDialogFuture;
+    std::atomic<bool> fileDialogActive(false);
+    std::string selectedFilePath;
+
+    
+    std::future<std::string> conesDialogFuture;
+    std::atomic<bool> conesDialogActive(false);
+    std::string selectedConesPath;
+
+
     
     std::string desktopPath = Utils::getDesktopPath();
     std::string currentPath = desktopPath;
@@ -213,8 +223,6 @@ int main(int argc, char **argv) {
     }
     gpsManager.start();
 
-    
-    FileBrowser fileBrowser(notificationManager);
 
     float mapOpacity = 0.5f;
     float lastTime = glfwGetTime();
@@ -281,102 +289,72 @@ int main(int argc, char **argv) {
             ImGui::SameLine();
 
             if (ImGui::Button("Load Log File")) {
-                nfdu8filteritem_t filterList[] = {
-                    { "Log files", "log,txt" } 
-                };
-                size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
-                nfdopendialogu8args_t args = {0};
-                args.filterList = filterList;
-                args.filterCount = filterCount;
-                args.defaultPath = NULL; 
-
-                nfdu8char_t* outPath = nullptr;
-
-                
-                nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
-
-                if (result == NFD_OKAY && outPath != nullptr) {
-                    printf("Selected file: %s\n", outPath);
+                if (!fileDialogActive.load()) {
+                    std::promise<std::string> fileDialogPromise;
+                    fileDialogFuture = fileDialogPromise.get_future();
+                    fileDialogActive.store(true);
 
                     
-                    gpsManager.stop();
+                    std::thread([promise = std::move(fileDialogPromise)]() mutable {
+                        nfdu8filteritem_t filterList[] = {
+                            { "Log files", "log,txt" }
+                        };
+                        size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
+                        nfdopendialogu8args_t args = {0};
+                        args.filterList = filterList;
+                        args.filterCount = filterCount;
+                        args.defaultPath = NULL; 
 
-                    
-                    gps_interface_close(&gpsManager.getGPS());
+                        nfdu8char_t* outPath = nullptr;
 
-                    
-                    if (gps_interface_open_file(&gpsManager.getGPS(), outPath) == -1) {
-                        printf("Error opening selected file: %s\n", outPath);
-                        notificationManager.showPopup("FileBrowser", "Error", "Failed to open selected file.", NotificationType::Error);
-                    } else {
                         
-                        gpsManager.resetSessionData();
-                        gpsManager.start();
+                        nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
 
-                        notificationManager.showPopup("Success", "Success", "Successfully loaded log file.", NotificationType::Success);
-                    }
-
-                    
-                    NFD_FreePathU8(outPath);
-                }
-                else if (result == NFD_CANCEL) {
-                    printf("User canceled file selection.\n");
-                }
-                else {
-                    printf("Error selecting file: %s\n", NFD_GetError());
+                        if (result == NFD_OKAY && outPath != nullptr) {
+                            std::string selectedFile(outPath);
+                            NFD_FreePathU8(outPath);
+                            promise.set_value(selectedFile);
+                        } else {
+                            promise.set_value("");
+                        }
+                    }).detach();
                 }
             }
-            ImGui::SameLine();
+            ImGui::SameLine(); 
 
             if (ImGui::Button("Load Cones CSV")) {
-    nfdu8filteritem_t filterList[] = {
-        { "CSV files", "csv" }  
-    };
-    size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
+                if (!conesDialogActive.load()) {
+                    std::promise<std::string> conesDialogPromise;
+                    conesDialogFuture = conesDialogPromise.get_future();
+                    conesDialogActive.store(true);
 
-    nfdopendialogu8args_t args = {0};
-    args.filterList = filterList;
-    args.filterCount = filterCount;
-    args.defaultPath = NULL; 
+                    
+                    std::thread([promise = std::move(conesDialogPromise)]() mutable {
+                        nfdu8filteritem_t filterList[] = {
+                            { "CSV files", "csv" }  
+                        };
+                        size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
 
-    nfdu8char_t* outPath = nullptr;
+                        nfdopendialogu8args_t args = {0};
+                        args.filterList = filterList;
+                        args.filterCount = filterCount;
+                        args.defaultPath = NULL; 
 
-    // Open File Dialog
-    nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+                        nfdu8char_t* outPath = nullptr;
 
-    if (result == NFD_OKAY && outPath != nullptr) {
-        printf("Selected CSV file: %s\n", outPath);
+                        
+                        nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
 
-        std::vector<cone_t> loadedCones;
-
-        // Load Cones from CSV
-        if (conesLoader.loadFromCSV(outPath, loadedCones)) {
-            // Clear existing cones in gpsManager
-            gpsManager.clearCones();
-
-            // Add loaded cones to gpsManager
-            for (const auto& cone : loadedCones) {
-                gpsManager.addCone(cone);
+                        if (result == NFD_OKAY && outPath != nullptr) {
+                            std::string selectedFile(outPath);
+                            NFD_FreePathU8(outPath);
+                            promise.set_value(selectedFile);
+                        } else {
+                            promise.set_value("");
+                        }
+                    }).detach();
+                }
             }
-
-            notificationManager.showPopup("Cones_Loaded", "Success", "Successfully loaded cones from CSV.", NotificationType::Success);
-            printf("Cones loaded from CSV: %s\n", outPath);
-            resetView = true; 
-        } else {
-            notificationManager.showPopup("Cones_Load_Error", "Error", "Failed to load cones from the selected CSV file.", NotificationType::Error);
-            printf("Failed to load cones from CSV: %s\n", outPath);
-        }
-
-        // Free the path allocated by NFD
-        NFD_FreePathU8(outPath);
-    }
-    else if (result == NFD_CANCEL) {
-        printf("User canceled CSV file selection.\n");
-    }
-    else {
-        printf("Error selecting CSV file: %s\n", NFD_GetError());
-    }
-}
 
 
             ImGui::EndGroup(); 
@@ -981,12 +959,83 @@ int main(int argc, char **argv) {
         }
 
         
+        if (fileDialogActive.load()) {
+            if (fileDialogFuture.valid()) { 
+                if (fileDialogFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                    selectedFilePath = fileDialogFuture.get();
+                    fileDialogActive.store(false);
+                    if (!selectedFilePath.empty()) {
+                        printf("Selected file: %s\n", selectedFilePath.c_str());
+
+                        
+                        gpsManager.stop();
+                        gps_interface_close(&gpsManager.getGPS());
+
+                        if (gps_interface_open_file(&gpsManager.getGPS(), selectedFilePath.c_str()) == -1) {
+                            printf("Error opening selected file: %s\n", selectedFilePath.c_str());
+                            notificationManager.showPopup("FileBrowser", "Error", "Failed to open selected file.", NotificationType::Error);
+                        } else {
+                            gpsManager.resetSessionData();
+                            gpsManager.start();
+
+                            notificationManager.showPopup("Success", "Success", "Successfully loaded log file.", NotificationType::Success);
+                        }
+                    } else {
+                        printf("User canceled file selection or an error occurred.\n");
+                    }
+                }
+            } else {
+                
+                fileDialogActive.store(false);
+            }
+        }
+
+        
+        if (conesDialogActive.load()) {
+            if (conesDialogFuture.valid()) { 
+                if (conesDialogFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                    selectedConesPath = conesDialogFuture.get();
+                    conesDialogActive.store(false);
+                    if (!selectedConesPath.empty()) {
+                        printf("Selected CSV file: %s\n", selectedConesPath.c_str());
+
+                        std::vector<cone_t> loadedCones;
+
+                        
+                        if (conesLoader.loadFromCSV(selectedConesPath, loadedCones)) {
+                            
+                            gpsManager.clearCones();
+
+                            
+                            for (const auto& cone : loadedCones) {
+                                gpsManager.addCone(cone);
+                            }
+
+                            notificationManager.showPopup("Cones_Loaded", "Success", "Successfully loaded cones from CSV.", NotificationType::Success);
+                            printf("Cones loaded from CSV: %s\n", selectedConesPath.c_str());
+                            resetView = true; 
+                        } else {
+                            notificationManager.showPopup("Cones_Load_Error", "Error", "Failed to load cones from the selected CSV file.", NotificationType::Error);
+                            printf("Failed to load cones from CSV: %s\n", selectedConesPath.c_str());
+                        }
+                    } else {
+                        printf("User canceled CSV file selection or an error occurred.\n");
+                    }
+                }
+            } else {
+                
+                conesDialogActive.store(false);
+            }
+        }
+
+
+        
         gui.endFrame();
     }
 
     
     SaveConfig(currentTheme, fontManager.getSelectedFontIndex());
-
+    
     
     gpsManager.stop();
     gui.cleanup();
