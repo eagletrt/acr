@@ -32,7 +32,7 @@ private:
     std::vector<IconInfo> icons_;
 
     
-    ImTextureID loadImagePNG(const char* path, NotificationManager& notificationManager);
+    ImTextureID loadIconImage(const char* path, NotificationManager& notificationManager);
 };
 
 #endif 

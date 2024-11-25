@@ -1,5 +1,3 @@
-
-
 #define STB_IMAGE_IMPLEMENTATION
 #include "gui.hpp"
 #include "config.hpp"
@@ -24,6 +22,9 @@
 #include "stb_image.h"
 #include "nfd.h"
 #include <future>
+#include <sstream>
+#include <cfloat>
+#include "map.hpp"
 
 extern "C" {
     #include "acr.h"
@@ -34,15 +35,11 @@ extern "C" {
 
 #include "gps.hpp"
 #include "notifications.hpp"
-#include "map.hpp"
+
 #include "font_manager.hpp"
 #include "icon_manager.hpp"
 #include "utils.hpp"
 #include "cones_loader.hpp"
-
-#include "notifications.hpp"
-#include "icon_manager.hpp"
-
 
 struct BoolWrapper {
     bool value;
@@ -50,19 +47,20 @@ struct BoolWrapper {
     BoolWrapper(bool val = true) : value(val) {}
 };
 
-
 extern void setEnhancedTheme();
-bool LoadConfig(AppTheme& theme, int& lastFontIndex) {
+
+bool LoadConfig(AppTheme& theme, int& lastFontIndex, std::string& currentPath) {
     std::ifstream configFile("config.ini");
     if (!configFile.is_open()) {
-        
         theme = AppTheme::Dark;
         lastFontIndex = 0;
+        currentPath = Utils::getDesktopPath(); 
         return false;
     }
     std::string line;
     bool themeSet = false;
     bool fontSet = false;
+    bool pathSet = false;
     while (std::getline(configFile, line)) {
         std::istringstream iss(line);
         std::string key, value;
@@ -71,21 +69,23 @@ bool LoadConfig(AppTheme& theme, int& lastFontIndex) {
                 if (value == "Dark") {
                     theme = AppTheme::Dark;
                     themeSet = true;
-                } else if (value == "Blue") { 
+                } else if (value == "Blue") {
                     theme = AppTheme::Blue;
                     themeSet = true;
                 } else if (value == "Light") {
                     theme = AppTheme::Light;
                     themeSet = true;
                 }
-            }
-            else if (key == "last_font") {
+            } else if (key == "last_font") {
                 try {
                     lastFontIndex = std::stoi(value);
                     fontSet = true;
                 } catch (...) {
                     lastFontIndex = 0;
                 }
+            } else if (key == "current_path") {
+                currentPath = value;
+                pathSet = true;
             }
         }
     }
@@ -96,10 +96,13 @@ bool LoadConfig(AppTheme& theme, int& lastFontIndex) {
     if (!fontSet) {
         lastFontIndex = 0;
     }
-    return themeSet && fontSet;
+    if (!pathSet) {
+        currentPath = Utils::getDesktopPath();
+    }
+    return themeSet && fontSet && pathSet;
 }
 
-bool SaveConfig(const AppTheme& theme, int lastFontIndex) {
+bool SaveConfig(const AppTheme& theme, int lastFontIndex, const std::string& currentPath) {
     std::ofstream configFile("config.ini", std::ios::out | std::ios::trunc);
     if (!configFile.is_open()) {
         printf("Failed to open config file for writing.\n");
@@ -119,15 +122,14 @@ bool SaveConfig(const AppTheme& theme, int lastFontIndex) {
     }
     configFile << "theme=" << themeStr << "\n";
     configFile << "last_font=" << lastFontIndex << "\n";
+    configFile << "current_path=" << currentPath << "\n";
     configFile.close();
     return true;
 }
 
-
 float CalculateDistance(float x1, float y1, float x2, float y2) {
     return sqrtf((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2));
 }
-
 
 int main(int argc, char **argv) {
     
@@ -144,16 +146,25 @@ int main(int argc, char **argv) {
     std::future<std::string> conesDialogFuture;
     std::atomic<bool> conesDialogActive(false);
     std::string selectedConesPath;
+    std::string currentPath;
 
 
     
     std::string desktopPath = Utils::getDesktopPath();
-    std::string currentPath = desktopPath;
 
-    const char *basepath = getenv("HOME");
-    if (basepath == nullptr) {
+    const char* home_env = getenv("HOME");
+    if (home_env == nullptr) {
         printf("Error: HOME environment variable not set.\n");
         return -1;
+    }
+    std::string basepath(home_env);
+    std::string logs_v2_basepath = basepath + "/logs-v2";
+
+    if (!std::filesystem::exists(logs_v2_basepath)) {
+        if (!std::filesystem::create_directories(logs_v2_basepath)) {
+            printf("Error: Could not create directory %s\n", logs_v2_basepath.c_str());
+            return -1;
+        }
     }
 
     
@@ -179,7 +190,7 @@ int main(int argc, char **argv) {
     
     AppTheme currentTheme = AppTheme::Dark;
     int lastFontIndex = 0;
-    LoadConfig(currentTheme, lastFontIndex);
+    LoadConfig(currentTheme, lastFontIndex, currentPath);
 
     
     fontManager.initializeFonts(io, FONTS_DIR, lastFontIndex);
@@ -263,6 +274,8 @@ int main(int argc, char **argv) {
         float deltaTime = currentTimeSec - lastTime;
         lastTime = currentTimeSec;
 
+        mapManager.processPendingTextures();
+
         
         gui.startFrame();
 
@@ -288,76 +301,74 @@ int main(int argc, char **argv) {
             }
             ImGui::SameLine();
 
+            
             if (ImGui::Button("Load Log File")) {
                 if (!fileDialogActive.load()) {
-                    std::promise<std::string> fileDialogPromise;
-                    fileDialogFuture = fileDialogPromise.get_future();
+                    auto promisePtr = std::make_shared<std::promise<std::string>>();
+                    fileDialogFuture = promisePtr->get_future();
                     fileDialogActive.store(true);
 
-                    
-                    std::thread([promise = std::move(fileDialogPromise)]() mutable {
+                    std::thread([promisePtr, currentPath]() mutable {
                         nfdu8filteritem_t filterList[] = {
                             { "Log files", "log,txt" }
                         };
                         size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
+
                         nfdopendialogu8args_t args = {0};
                         args.filterList = filterList;
                         args.filterCount = filterCount;
-                        args.defaultPath = NULL; 
+                        args.defaultPath = currentPath.c_str();
 
                         nfdu8char_t* outPath = nullptr;
 
-                        
                         nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
 
                         if (result == NFD_OKAY && outPath != nullptr) {
                             std::string selectedFile(outPath);
                             NFD_FreePathU8(outPath);
-                            promise.set_value(selectedFile);
+                            promisePtr->set_value(selectedFile);
                         } else {
-                            promise.set_value("");
+                            promisePtr->set_value("");
                         }
                     }).detach();
                 }
             }
-            ImGui::SameLine(); 
+            ImGui::SameLine();
 
+            
             if (ImGui::Button("Load Cones CSV")) {
                 if (!conesDialogActive.load()) {
-                    std::promise<std::string> conesDialogPromise;
-                    conesDialogFuture = conesDialogPromise.get_future();
+                    auto promisePtr = std::make_shared<std::promise<std::string>>();
+                    conesDialogFuture = promisePtr->get_future();
                     conesDialogActive.store(true);
 
-                    
-                    std::thread([promise = std::move(conesDialogPromise)]() mutable {
+                    std::thread([promisePtr, currentPath]() mutable {
                         nfdu8filteritem_t filterList[] = {
-                            { "CSV files", "csv" }  
+                            { "CSV files", "csv" }
                         };
                         size_t filterCount = sizeof(filterList) / sizeof(filterList[0]);
 
                         nfdopendialogu8args_t args = {0};
                         args.filterList = filterList;
                         args.filterCount = filterCount;
-                        args.defaultPath = NULL; 
+                        args.defaultPath = currentPath.c_str();
 
                         nfdu8char_t* outPath = nullptr;
 
-                        
                         nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
 
                         if (result == NFD_OKAY && outPath != nullptr) {
                             std::string selectedFile(outPath);
                             NFD_FreePathU8(outPath);
-                            promise.set_value(selectedFile);
+                            promisePtr->set_value(selectedFile);
                         } else {
-                            promise.set_value("");
+                            promisePtr->set_value("");
                         }
                     }).detach();
                 }
             }
 
-
-            ImGui::EndGroup(); 
+            ImGui::EndGroup();
 
             
             ImGui::Spacing();
@@ -469,7 +480,7 @@ int main(int argc, char **argv) {
                         if (fontManager.getSelectedFontIndex() >= 0 && fontManager.getSelectedFontIndex() < static_cast<int>(fontManager.getAvailableFonts().size())) {
                             io.FontDefault = fontManager.getSelectedFont();
                             
-                            SaveConfig(currentTheme, fontManager.getSelectedFontIndex());
+                            SaveConfig(currentTheme, fontManager.getSelectedFontIndex(), currentPath);
                         }
 
                         
@@ -495,7 +506,7 @@ int main(int argc, char **argv) {
                             SetImPlotStyle(currentTheme);
                             notificationManager.showPopup("Theme", "Theme Changed", "The application theme has been updated.", NotificationType::Info);
                             
-                            SaveConfig(currentTheme, fontManager.getSelectedFontIndex());
+                            SaveConfig(currentTheme, fontManager.getSelectedFontIndex(), currentPath);
                         }
                         if (ImGui::IsItemHovered())
                             ImGui::SetTooltip("Choose a theme for the application.");
@@ -584,7 +595,7 @@ int main(int argc, char **argv) {
                         notificationManager.showPopup("Session", "Session Stopped", "Recording session ended.", NotificationType::Info);
                     }
                     else {
-                        if (csv_session_setup(&gpsManager.getSession(), basepath) == -1) {
+                        if (csv_session_setup(&gpsManager.getSession(), logs_v2_basepath.c_str()) == -1) {
                             printf("Error: Session setup failed.\n");
                             notificationManager.showPopup("Session", "Error", "Session setup failed.", NotificationType::Error);
                         }
@@ -632,7 +643,7 @@ int main(int argc, char **argv) {
 
                 
                 if (gpsManager.saveCone_.load() && gpsManager.getConeSession().active == 0) {
-                    if (cone_session_setup(&gpsManager.getConeSession(), basepath) == -1) {
+                    if (cone_session_setup(&gpsManager.getConeSession(), logs_v2_basepath.c_str()) == -1) {
                         printf("Error: Cone session setup failed.\n");
                         notificationManager.showPopup("Cone_Session", "Error", "Cone session setup failed.", NotificationType::Error);
                     }
@@ -955,6 +966,7 @@ int main(int argc, char **argv) {
                 ImGui::EndPopup();
             }
 
+            mapManager.processPendingTextures();
             ImGui::End(); 
         }
 
@@ -966,7 +978,8 @@ int main(int argc, char **argv) {
                     fileDialogActive.store(false);
                     if (!selectedFilePath.empty()) {
                         printf("Selected file: %s\n", selectedFilePath.c_str());
-
+                        std::filesystem::path filePath(selectedFilePath);
+                        currentPath = filePath.parent_path().string();
                         
                         gpsManager.stop();
                         gps_interface_close(&gpsManager.getGPS());
@@ -1001,6 +1014,9 @@ int main(int argc, char **argv) {
 
                         std::vector<cone_t> loadedCones;
 
+                        std::filesystem::path filePath(selectedConesPath);
+                        currentPath = filePath.parent_path().string();
+
                         
                         if (conesLoader.loadFromCSV(selectedConesPath, loadedCones)) {
                             
@@ -1034,7 +1050,7 @@ int main(int argc, char **argv) {
     }
 
     
-    SaveConfig(currentTheme, fontManager.getSelectedFontIndex());
+    SaveConfig(currentTheme, fontManager.getSelectedFontIndex(), currentPath);
     
     
     gpsManager.stop();

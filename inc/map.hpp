@@ -1,13 +1,13 @@
-
 #ifndef MAP_HPP
 #define MAP_HPP
 
 #include <string>
 #include <vector>
-#include <mutex> 
+#include <mutex>
+#include <queue>
 #include "imgui.h"
 #include "implot.h"
-#include "notifications.hpp" 
+#include "notifications.hpp"
 #include "config.hpp"
 
 extern "C" {
@@ -17,14 +17,23 @@ extern "C" {
 
 
 struct MapInfo {
-    std::string name;     
-    std::string filePath; 
-    ImVec2 boundBL;       
-    ImVec2 boundTR;       
-    ImTextureID texture;  
+    std::string name;          
+    std::string filePath;      
+    ImVec2 boundBL;            
+    ImVec2 boundTR;            
+    ImTextureID texture;       
+};
+
+
+struct PendingTexture {
+    std::string name;                      
+    std::vector<unsigned char> imageData;  
+    int width;                             
+    int height;                            
 };
 
 class NotificationManager;
+
 
 class MapManager {
 public:
@@ -36,6 +45,9 @@ public:
 
     
     bool loadMapTextures();
+
+    
+    void processPendingTextures();
 
     
     int findClosestCone(const ImPlotPoint& mousePos, const std::vector<cone_t>& cones, float hitRadius) const;
@@ -51,15 +63,21 @@ public:
     int selectedConeIndex_;
     bool showConeContextMenu_;
     int selectedMapIndex_;
-     mutable std::mutex mapMutex_; 
+    mutable std::mutex mapMutex_; 
 
 private:
     std::vector<MapInfo> maps_;          
     NotificationManager& notificationManager_; 
-          
 
     
-    ImTextureID loadImageJPG(const char *path);
+    std::queue<PendingTexture> pendingTextures_;
+    std::mutex pendingTexturesMutex_;
+
+    
+    void loadMapsAsync();
+
+    
+    bool loadImageData(const std::string& filePath, std::vector<unsigned char>& imageData, int& width, int& height);
 };
 
-#endif 
+#endif

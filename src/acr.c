@@ -69,21 +69,41 @@ int dir_next_number(char *path, char *basename) {
 
 int cone_session_setup(cone_session_t *session, const char *basepath) {
   strcpy(session->session_path, basepath);
-
-  strcat(session->session_path, "/logs/acr/");
+  strcat(session->session_path, "/acr/");  
 
   if (dir_exist_or_create(session->session_path) == -1) {
     return -1;
   }
 
   int session_count = dir_next_number(session->session_path, "cones_");
+  if (session_count == -1) {
+    return -1;
+  }
 
-  snprintf(session->session_name, 1024, "cones_%03d", session_count + 1);
+  snprintf(session->session_name, sizeof(session->session_name), "cones_%03d", session_count + 1);
   strcat(session->session_path, session->session_name);
 
   return 0;
 }
 
+int csv_session_setup(full_session_t *session, const char *basepath) {
+  strcpy(session->session_path, basepath);
+  strcat(session->session_path, "/acr/");  
+
+  if (dir_exist_or_create(session->session_path) == -1) {
+    return -1;
+  }
+
+  int session_count = dir_next_number(session->session_path, "trajectory_");
+  if (session_count == -1) {
+    return -1;
+  }
+
+  snprintf(session->session_name, sizeof(session->session_name), "trajectory_%03d", session_count + 1);
+  strcat(session->session_path, session->session_name);
+
+  return 0;
+}
 int cone_session_start(cone_session_t *session) {
   if (dir_exist_or_create(session->session_path) == -1) {
     return -1;
@@ -109,21 +129,6 @@ int cone_session_stop(cone_session_t *session) {
   return 0;
 }
 
-int csv_session_setup(full_session_t *session, const char *basepath) {
-  strcpy(session->session_path, basepath);
-  strcat(session->session_path, "/logs/acr/");
-
-  if (dir_exist_or_create(session->session_path) == -1) {
-    return -1;
-  }
-
-  int session_count = dir_next_number(session->session_path, "trajectory_");
-
-  snprintf(session->session_name, 1024, "trajectory_%03d", session_count + 1);
-  strcat(session->session_path, session->session_name);
-
-  return 0;
-}
 int csv_session_start(full_session_t *session) {
   if (dir_exist_or_create(session->session_path) == -1) {
     return -1;

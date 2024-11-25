@@ -398,4 +398,3 @@ bool SaveConfig(const AppTheme& theme) {
     configFile.close();
     return true;
 }
-

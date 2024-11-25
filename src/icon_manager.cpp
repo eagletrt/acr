@@ -23,7 +23,7 @@ IconManager::~IconManager() {
 }
 
 
-ImTextureID IconManager::loadImagePNG(const char* path, NotificationManager& notificationManager) {
+ImTextureID IconManager::loadIconImage(const char* path, NotificationManager& notificationManager) {
     int width, height, channels;
     unsigned char* data = stbi_load(path, &width, &height, &channels, 4);
     if (data == NULL) {
@@ -48,19 +48,19 @@ ImTextureID IconManager::loadImagePNG(const char* path, NotificationManager& not
 
 
 void IconManager::loadIcons(NotificationManager& notificationManager) {
-    ImTextureID infoIcon = loadImagePNG(ICONS_DIR "info.png", notificationManager);
+    ImTextureID infoIcon = loadIconImage(ICONS_DIR "info.png", notificationManager);
     if (infoIcon != 0) {
         icons_.push_back({ "Info", infoIcon, ImVec2(16, 16) });
         printf("Loaded icon: Info\n");
     }
 
-    ImTextureID successIcon = loadImagePNG(ICONS_DIR "success.png", notificationManager);
+    ImTextureID successIcon = loadIconImage(ICONS_DIR "success.png", notificationManager);
     if (successIcon != 0) {
         icons_.push_back({ "Success", successIcon, ImVec2(16, 16) });
         printf("Loaded icon: Success\n");
     }
 
-    ImTextureID errorIcon = loadImagePNG(ICONS_DIR "error.png", notificationManager);
+    ImTextureID errorIcon = loadIconImage(ICONS_DIR "error.png", notificationManager);
     if (errorIcon != 0) {
         icons_.push_back({ "Error", errorIcon, ImVec2(16, 16) });
         printf("Loaded icon: Error\n");
