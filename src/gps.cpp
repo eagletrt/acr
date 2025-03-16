@@ -101,7 +101,7 @@ void GPSManager::resetSessionData() {
     user_data_.cone_session = &cone_session_;
     trajectory_.clear();
     cones_.clear();
-    currentPosition_ = ImVec2(0.0f, 0.0f); 
+    currentPosition_ = ImPlotPoint(0.0, 0.0); 
 }
 
 
@@ -185,12 +185,12 @@ void GPSManager::readGPSLoop() {
 }
 
 
-ImVec2 GPSManager::getCurrentPosition() const {
+ImPlotPoint GPSManager::getCurrentPosition() const {
     return currentPosition_;
 }
 
 
-std::vector<ImVec2> GPSManager::getTrajectory() const {
+std::vector<ImPlotPoint> GPSManager::getTrajectory() const {
     return trajectory_;
 }
 

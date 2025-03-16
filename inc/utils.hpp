@@ -3,9 +3,8 @@
 
 #include <string>
 
-class Utils {
-public:
-    static std::string getDesktopPath();
+namespace Utils {
+    std::string getDesktopPath();
 };
 
 #endif 

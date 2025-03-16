@@ -203,11 +203,11 @@ int main(int argc, char **argv) {
     MapManager mapManager(notificationManager);
     
     
-    mapManager.addMap("Povo", MAPS_DIR "Povo.jpg", ImVec2{11.148481543f, 46.065886358f}, ImVec2{11.151553543f, 46.068958358f});
-    mapManager.addMap("Vadena", MAPS_DIR "Vadena.jpg", ImVec2{11.309756609f, 46.430011962f}, ImVec2{11.316924609f, 46.438203962f});
-    mapManager.addMap("FSG", MAPS_DIR "FSG.jpg", ImVec2{8.558931763f, 49.323440890f}, ImVec2{8.595726757f, 49.335430701f});
-    mapManager.addMap("Ala", MAPS_DIR "Ala.jpg", ImVec2{11.010747213f, 45.784567764f}, ImVec2{11.013506837f, 45.787133634f});
-    mapManager.addMap("Varano", MAPS_DIR "Varano.jpg", ImVec2{10.013347233f, 44.677561879f}, ImVec2{10.031744730f, 44.684102509f});
+    mapManager.addMap("Povo", MAPS_DIR "Povo.jpg", ImPlotPoint{11.148481543, 46.065886358}, ImPlotPoint{11.151553543, 46.068958358});
+    mapManager.addMap("Vadena", MAPS_DIR "Vadena.jpg", ImPlotPoint{11.309756609, 46.430011962}, ImPlotPoint{11.316924609, 46.438203962});
+    mapManager.addMap("FSG", MAPS_DIR "FSG.jpg", ImPlotPoint{8.558931763, 49.323440890}, ImPlotPoint{8.595726757, 49.335430701});
+    mapManager.addMap("Ala", MAPS_DIR "Ala.jpg", ImPlotPoint{11.010747213, 45.784567764}, ImPlotPoint{11.013506837, 45.787133634});
+    mapManager.addMap("Varano", MAPS_DIR "Varano.jpg", ImPlotPoint{10.013347233, 44.677561879}, ImPlotPoint{10.031744730, 44.684102509});
 
     
     if (!mapManager.loadMapTextures()) {
@@ -256,8 +256,8 @@ int main(int argc, char **argv) {
     std::vector<BoolWrapper> coneVisibility;
 
     
-    ImVec2 lastPlotPos(10, 10); 
-    ImVec2 lastPlotSize(0, 0);
+    ImPlotPoint lastPlotPos(10, 10); 
+    ImPlotPoint lastPlotSize(0, 0);
 
     
     bool isDragging = false;
@@ -449,14 +449,18 @@ int main(int argc, char **argv) {
                         
                         ImGui::Text("Select Map:");
                         const auto& maps = mapManager.getMaps();
-                        for (int i = 0; i < static_cast<int>(maps.size()); i++) {
+                        for (size_t i = 0; i < maps.size(); i++) {
                             if (ImGui::RadioButton(maps[i].name.c_str(), &mapManager.selectedMapIndex_, i)) {
                                 notificationManager.showPopup("MapManager", "Map Selected", "You have selected the map: " + maps[i].name, NotificationType::Success);
                                 printf("Selected map: %s\n", maps[i].name.c_str());
                                 resetView = true;
                             }
-                            if (ImGui::IsItemHovered())
+                            if(i != maps.size() - 1) {
+                              ImGui::SameLine();
+                            }
+                            if (ImGui::IsItemHovered()) {
                                 ImGui::SetTooltip("Select the map to display.");
+                            }
                         }
                     }
 
@@ -870,9 +874,10 @@ int main(int argc, char **argv) {
                 }
 
                 
-                ImVec2 currentPos = gpsManager.getCurrentPosition();
+                ImPlotPoint currentPos = gpsManager.getCurrentPosition();
                 if (showCurrentPosition && (currentPos.x != 0.0f || currentPos.y != 0.0f)) {
-                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Diamond, 10, ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 0.0f);
+                    constexpr auto col = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 8, ImVec4(0.0, 0.0, 0.0, 0.0), 3.0f, col);
                     ImPlot::PlotScatter("Current Position", &currentPos.x, &currentPos.y, 1);
                 }
 

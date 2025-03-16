@@ -19,8 +19,8 @@ extern "C" {
 struct MapInfo {
     std::string name;          
     std::string filePath;      
-    ImVec2 boundBL;            
-    ImVec2 boundTR;            
+    ImPlotPoint boundBL;            
+    ImPlotPoint boundTR;            
     ImTextureID texture;       
 };
 
@@ -41,7 +41,7 @@ public:
     ~MapManager();
 
     
-    void addMap(const std::string& name, const std::string& filePath, const ImVec2& boundBL, const ImVec2& boundTR);
+    void addMap(const std::string& name, const std::string& filePath, const ImPlotPoint& boundBL, const ImPlotPoint& boundTR);
 
     
     bool loadMapTextures();

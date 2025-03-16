@@ -25,7 +25,7 @@ MapManager::~MapManager() {
 }
 
 
-void MapManager::addMap(const std::string& name, const std::string& filePath, const ImVec2& boundBL, const ImVec2& boundTR) {
+void MapManager::addMap(const std::string& name, const std::string& filePath, const ImPlotPoint& boundBL, const ImPlotPoint& boundTR) {
     std::lock_guard<std::mutex> lock(mapMutex_);
     maps_.push_back(MapInfo{ name, filePath, boundBL, boundTR, 0 });
     std::cout << "Added map: " << name << std::endl;

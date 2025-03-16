@@ -7,6 +7,7 @@
 #include <mutex>
 #include <vector>
 #include "imgui.h"  
+#include "implot.h"
 #include "notifications.hpp" 
 #include "config.hpp"
 
@@ -36,8 +37,8 @@ public:
     void resetSessionData();
 
     
-    ImVec2 getCurrentPosition() const;
-    std::vector<ImVec2> getTrajectory() const;
+    ImPlotPoint getCurrentPosition() const;
+    std::vector<ImPlotPoint> getTrajectory() const;
     std::vector<cone_t>& getCones();
 
     
@@ -77,8 +78,8 @@ private:
     full_session_t session_;
     cone_session_t cone_session_;
 
-    ImVec2 currentPosition_;
-    std::vector<ImVec2> trajectory_;
+    ImPlotPoint currentPosition_;
+    std::vector<ImPlotPoint> trajectory_;
     std::vector<cone_t> cones_;
 
     std::thread gpsThread_;
