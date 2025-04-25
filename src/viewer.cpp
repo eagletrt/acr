@@ -775,35 +775,42 @@ int main(int argc, char **argv) {
                     coneVisibility.resize(cones.size(), BoolWrapper{true});
                 }
 
-                
-                ImPlotPoint mousePos = ImPlot::GetPlotMousePos();
-                float hitRadius = 0.0001f; 
+                ImVec2 mouseScreen = ImGui::GetMousePos();
+                const float hitRadiusPx = 10.0f; 
                 int closestConeIndex = -1;
-                float minDistance = FLT_MAX;
+                float minDistPx = FLT_MAX;
 
-                
                 for (size_t i = 0; i < cones.size(); ++i) {
-                    if (coneVisibility[i].value) {
-                        float distance = CalculateDistance(mousePos.x, mousePos.y, cones[i].lon, cones[i].lat);
-                        if (distance < hitRadius && distance < minDistance) {
-                            closestConeIndex = static_cast<int>(i);
-                            minDistance = distance;
-                        }
-                    }
-                }
+                    if (!coneVisibility[i].value) 
+                        continue;
 
-                
-                if (!isDragging && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
-                    if (closestConeIndex != -1) {
-                        
-                        isDragging = true;
-                        draggedConeIndex = closestConeIndex;
-                        printf("Started dragging Cone %d\n", draggedConeIndex);
-                        notificationManager.showPopup("Drag_Cone_Start", "Drag Started", "Dragging cone started.", NotificationType::Info);
-                        dragStarted = true;
-                        dragEnded = false;
+                    ImVec2 coneScreen = ImPlot::PlotToPixels(
+                        ImPlotPoint(cones[i].lon, cones[i].lat)
+                    );
+
+                    float dx = mouseScreen.x - coneScreen.x;
+                    float dy = mouseScreen.y - coneScreen.y;
+                    float distPx = sqrtf(dx*dx + dy*dy);
+
+                    if (distPx < hitRadiusPx && distPx < minDistPx) {
+                        closestConeIndex = static_cast<int>(i);
+                        minDistPx = distPx;
                     }
                 }
+                
+                if (!isDragging && closestConeIndex != -1 
+                    && ImGui::IsMouseClicked(ImGuiMouseButton_Left) 
+                    && ImPlot::IsPlotHovered()) {
+                    isDragging = true;
+                    draggedConeIndex = closestConeIndex;
+                    notificationManager.showPopup(
+                        "Drag_Cone_Start", 
+                        "Drag Started", 
+                        "Dragging cone started.", 
+                        NotificationType::Info
+                    );
+                }
+                
 
                 if (isDragging && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                     if (draggedConeIndex >= 0 && draggedConeIndex < static_cast<int>(cones.size())) {
