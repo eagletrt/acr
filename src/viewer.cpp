@@ -278,7 +278,7 @@ int main(int argc, char **argv) {
 
         
         gui.startFrame();
-
+        bool shiftDown = ImGui::GetIO().KeyShift;
         
         notificationManager.processNotifications(deltaTime);
 
@@ -776,40 +776,46 @@ int main(int argc, char **argv) {
                 }
 
                 ImVec2 mouseScreen = ImGui::GetMousePos();
-                const float hitRadiusPx = 10.0f; 
+                const float hitRadiusPx = 10.0f;
                 int closestConeIndex = -1;
                 float minDistPx = FLT_MAX;
-
+                
                 for (size_t i = 0; i < cones.size(); ++i) {
                     if (!coneVisibility[i].value) 
                         continue;
-
+                
                     ImVec2 coneScreen = ImPlot::PlotToPixels(
                         ImPlotPoint(cones[i].lon, cones[i].lat)
                     );
-
+                
                     float dx = mouseScreen.x - coneScreen.x;
                     float dy = mouseScreen.y - coneScreen.y;
                     float distPx = sqrtf(dx*dx + dy*dy);
-
+                
                     if (distPx < hitRadiusPx && distPx < minDistPx) {
                         closestConeIndex = static_cast<int>(i);
                         minDistPx = distPx;
                     }
                 }
                 
-                if (!isDragging && closestConeIndex != -1 
-                    && ImGui::IsMouseClicked(ImGuiMouseButton_Left) 
-                    && ImPlot::IsPlotHovered()) {
+                
+                if (!isDragging
+                    && shiftDown
+                    && closestConeIndex != -1
+                    && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                    && ImPlot::IsPlotHovered())
+                {
                     isDragging = true;
                     draggedConeIndex = closestConeIndex;
                     notificationManager.showPopup(
-                        "Drag_Cone_Start", 
-                        "Drag Started", 
-                        "Dragging cone started.", 
+                        "Drag_Cone_Start",
+                        "Drag Started",
+                        "Dragging cone started.",
                         NotificationType::Info
                     );
+                    printf("Started dragging Cone %d\n", draggedConeIndex);
                 }
+                
                 
 
                 if (isDragging && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
@@ -827,15 +833,21 @@ int main(int argc, char **argv) {
                     }
                 }
 
-                if (isDragging && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                if (isDragging
+                    && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+                {
                     if (draggedConeIndex >= 0 && draggedConeIndex < static_cast<int>(cones.size())) {
+                        notificationManager.showPopup(
+                            "Drag_Cone_End",
+                            "Drag Completed",
+                            "Cone moved successfully.",
+                            NotificationType::Success
+                        );
                         printf("Stopped dragging Cone %d\n", draggedConeIndex);
-                        notificationManager.showPopup("Drag_Cone_End", "Drag Completed", "Cone moved successfully.", NotificationType::Success);
                     }
                     isDragging = false;
                     draggedConeIndex = -1;
-                    dragEnded = true;
-                }
+                }                
 
                 
                 if (ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {

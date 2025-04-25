@@ -40,27 +40,52 @@ int GPSManager::initialize(const char* port_or_file) {
     gps_interface_initialize(&gps_);
     if (port_or_file) {
         struct stat statbuf;
-        if (stat(port_or_file, &statbuf) == 0 && S_ISCHR(statbuf.st_mode)) {
-            
-            char buff[255];
-            snprintf(buff, sizeof(buff), "sudo chmod 777 %s", port_or_file);
-            printf("Changing permissions on serial port: %s with command: %s\n",
-                   port_or_file, buff);
-            system(buff);
-            res = gps_interface_open(&gps_, port_or_file, GPS_DEFAULT_BAUDRATE);
-        }
-        else if (stat(port_or_file, &statbuf) == 0 && S_ISREG(statbuf.st_mode)) {
-            
-            printf("Opening file: %s\n", port_or_file);
-            res = gps_interface_open_file(&gps_, port_or_file);
+        if (stat(port_or_file, &statbuf) == 0) {
+            if (S_ISCHR(statbuf.st_mode)) {
+                res = gps_interface_open(&gps_, port_or_file, GPS_DEFAULT_BAUDRATE);
+                if (res == -1) {
+                    printf("Error: failed to open serial port %s\n", port_or_file);
+                    notificationManager_.showPopup(
+                        "GPSManager",
+                        "Error",
+                        "Failed to open serial port. Check permissions or udev rules.",
+                        NotificationType::Error
+                    );
+                }
+            }
+            else if (S_ISREG(statbuf.st_mode)) {
+                printf("Opening file: %s\n", port_or_file);
+                res = gps_interface_open_file(&gps_, port_or_file);
+                if (res == -1) {
+                    printf("Error: failed to open file %s\n", port_or_file);
+                    notificationManager_.showPopup(
+                        "GPSManager",
+                        "Error",
+                        "Failed to open GPS log file.",
+                        NotificationType::Error
+                    );
+                }
+            }
+            else {
+                printf("Error: %s exists but is neither serial device nor file.\n", port_or_file);
+                notificationManager_.showPopup(
+                    "GPSManager",
+                    "Error",
+                    "Specified path is not a serial device or log file.",
+                    NotificationType::Error
+                );
+                return -1;
+            }
         }
         else {
-            printf("Error: %s does not exist or is not a regular file.\n", port_or_file);
-            notificationManager_.showPopup("GPSManager", "Error", "Specified file does not exist.", NotificationType::Error);
-        }
-        if (res == -1) {
-            printf("Error: GPS not found or failed to initialize.\n");
-            notificationManager_.showPopup("GPSManager", "Error", "GPS not found or failed to initialize.", NotificationType::Error);
+            printf("Error: %s does not exist.\n", port_or_file);
+            notificationManager_.showPopup(
+                "GPSManager",
+                "Error",
+                "Specified path does not exist.",
+                NotificationType::Error
+            );
+            return -1;
         }
     }
     return res;
