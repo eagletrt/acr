@@ -10,6 +10,8 @@
 #include "main.h"
 #include "utils.h"
 #include "config.hpp"
+#include <regex>
+#include <string>
 
 
 GPSManager::GPSManager(NotificationManager& notificationManager)
@@ -35,16 +37,36 @@ gps_parsed_data_t GPSManager::getGPSData() const {
 }
 
 
-int GPSManager::initialize(const char* port_or_file) {
+int GPSManager::initialize(const char* portFile) {
     int res = 0;
     gps_interface_initialize(&gps_);
-    if (port_or_file) {
+
+    if(!portFile) return 0;
+
+    int udpPort=0;
+    if(parseUdpSpec(portFile,udpPort)){
+        res=gps_interface_open_udp(&gps_,udpPort);
+        if(res==-1){
+            printf("Error: failed to open UDP port %d\n",udpPort);
+            notificationManager_.showPopup(
+                "GPSManager",
+                "Error",
+                "Failed to open UDP port. Check if it's already in use.",
+                NotificationType::Error
+            );
+        } else {
+            printf("Listening for GPS data on UDP port %d\n",udpPort);
+        }
+        return res;
+    }
+
+    if (portFile) {
         struct stat statbuf;
-        if (stat(port_or_file, &statbuf) == 0) {
+        if (stat(portFile, &statbuf) == 0) {
             if (S_ISCHR(statbuf.st_mode)) {
-                res = gps_interface_open(&gps_, port_or_file, GPS_DEFAULT_BAUDRATE);
+                res = gps_interface_open(&gps_, portFile, GPS_DEFAULT_BAUDRATE);
                 if (res == -1) {
-                    printf("Error: failed to open serial port %s\n", port_or_file);
+                    printf("Error: failed to open serial port %s\n", portFile);
                     notificationManager_.showPopup(
                         "GPSManager",
                         "Error",
@@ -54,10 +76,10 @@ int GPSManager::initialize(const char* port_or_file) {
                 }
             }
             else if (S_ISREG(statbuf.st_mode)) {
-                printf("Opening file: %s\n", port_or_file);
-                res = gps_interface_open_file(&gps_, port_or_file);
+                printf("Opening file: %s\n", portFile);
+                res = gps_interface_open_file(&gps_, portFile);
                 if (res == -1) {
-                    printf("Error: failed to open file %s\n", port_or_file);
+                    printf("Error: failed to open file %s\n", portFile);
                     notificationManager_.showPopup(
                         "GPSManager",
                         "Error",
@@ -67,7 +89,7 @@ int GPSManager::initialize(const char* port_or_file) {
                 }
             }
             else {
-                printf("Error: %s exists but is neither serial device nor file.\n", port_or_file);
+                printf("Error: %s exists but is neither serial device nor file.\n", portFile);
                 notificationManager_.showPopup(
                     "GPSManager",
                     "Error",
@@ -78,7 +100,7 @@ int GPSManager::initialize(const char* port_or_file) {
             }
         }
         else {
-            printf("Error: %s does not exist.\n", port_or_file);
+            printf("Error: %s does not exist.\n", portFile);
             notificationManager_.showPopup(
                 "GPSManager",
                 "Error",
@@ -89,6 +111,39 @@ int GPSManager::initialize(const char* port_or_file) {
         }
     }
     return res;
+}
+
+bool GPSManager::parseUdpSpec(const char* s, int& port_out){
+    if(!s||!*s) return false;
+    std::string in(s);
+
+    in.erase(0,in.find_first_not_of(" \t\n\r"));
+    in.erase(in.find_last_not_of(" \t\n\r")+1);
+
+    std::regex r1(R"(^(udp:|udp://)(?:0\.0\.0\.0|localhost|127\.0\.0\.1|:)?:?(\d{1,5})$)",
+                  std::regex::icase);
+
+    std::smatch m;
+    if(std::regex_match(in,m,r1)){
+        int p=std::stoi(m[2]);
+        if(p>0&&p<=65535){
+            port_out=p;
+            return true;
+        }
+        return false;
+    }
+
+    bool all_digits=!in.empty()&&std::all_of(in.begin(),in.end(),::isdigit);
+    if(all_digits){
+        int p=std::stoi(in);
+        if(p>0&&p<=65535){
+            port_out=p;
+            return true;
+        }
+        
+    }
+    return false;
+
 }
 
 void GPSManager::deleteCone(int index) {

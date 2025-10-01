@@ -127,6 +127,37 @@ bool SaveConfig(const AppTheme& theme, int lastFontIndex, const std::string& cur
     return true;
 }
 
+
+bool initializeGPS(const char* port,
+                   GPSManager& gpsM,
+                   NotificationManager& notificationManager,
+                   int maxAttempts = 5) {
+    int attempt = 0;
+    int delayMs = 500;         
+    const int maxDelayMs = 5000; 
+
+    while (attempt < maxAttempts) {
+        if (gpsM.initialize(port) != -1) {
+            
+            return true;
+        }
+        
+        if (attempt == 0) {
+            notificationManager.showPopup(
+                "GPS_Retry",
+                "Connessione GPS",
+                "Connessione fallita, riprovo automaticamente...",
+                NotificationType::Error
+            );
+        }
+        ++attempt;
+        std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+        delayMs = std::min(delayMs * 2, maxDelayMs);
+    }
+    
+    return false;
+}
+
 float CalculateDistance(float x1, float y1, float x2, float y2) {
     return sqrtf((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2));
 }
@@ -186,6 +217,7 @@ int main(int argc, char **argv) {
     
     FontManager fontManager;
     ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     
     AppTheme currentTheme = AppTheme::Dark;
@@ -194,6 +226,7 @@ int main(int argc, char **argv) {
 
     
     fontManager.initializeFonts(io, FONTS_DIR, lastFontIndex);
+    
 
     
     ApplyTheme(currentTheme); 
@@ -243,6 +276,10 @@ int main(int argc, char **argv) {
     std::vector<float> hdopValues;
     std::vector<float> pdopValues; 
     std::vector<float> timeValues;
+
+    double elapsedTime = 0.0;
+    static std::vector<double> pvtTimes;
+    static std::vector<double> pvtSpeeds;
     float plotTime = 0.0f;
     float windowSize = 60.0f; 
 
@@ -375,37 +412,34 @@ int main(int argc, char **argv) {
 
             
             if (showGPSDialog) {
-                if (ImGui::BeginPopupModal("Open GPS", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-                    ImGui::InputText("Serial Port", serialPortInput, sizeof(serialPortInput));
-                    if (ImGui::Button("OK")) {
-                        
-                        gpsManager.stop();
+                if(ImGui::BeginPopupModal("Open GPS", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                    ImGui::InputText("Serial Port or UDP (e.g., /dev/ttyUSB0 or 192.168.1.100:1234)", serialPortInput, sizeof(serialPortInput));
+                    if(ImGui::IsItemHovered()){
+                        ImGui::SetTooltip("Enter the serial port or UDP address.");
+                    }
 
-                        
+                    if(ImGui::Button("OK")){
+                        gpsManager.stop();
                         gps_interface_close(&gpsManager.getGPS());
 
-                        
-                        if (gpsManager.initialize(serialPortInput) == -1) {
-                            printf("Error: GPS not found or failed to initialize on port %s.\n", serialPortInput);
-                            notificationManager.showPopup("GPS_Error", "Error", "GPS not found or failed to initialize.", NotificationType::Error);
-                        } else {
-                            
-                            gpsManager.start();
-                            printf("Started reading GPS data from serial port %s.\n", serialPortInput);
-                            notificationManager.showPopup("GPS", "GPS Connected", "Reading GPS data from serial port.", NotificationType::Success);
+                        if(!initializeGPS(serialPortInput,gpsManager,notificationManager)){
+                            notificationManager.showPopup("GPS_Error","Error", "Failed to initialize GPS.", NotificationType::Error);
+                        }else{
+
+                            notificationManager.showPopup("GPS_Success","Success", "GPS initialized successfully.", NotificationType::Success);
                         }
 
-                        showGPSDialog = false;
+                        showGPSDialog=false;
                         ImGui::CloseCurrentPopup();
                     }
+
                     ImGui::SameLine();
-                    if (ImGui::Button("Cancel")) {
-                        showGPSDialog = false;
+                    if(ImGui::Button("Cancel")){
+                        showGPSDialog=false;
                         ImGui::CloseCurrentPopup();
                     }
                     ImGui::EndPopup();
                 }
-            }
 
             
             if (ImGui::BeginTabBar("MainTabBar")) {
@@ -554,6 +588,17 @@ int main(int argc, char **argv) {
                             ImPlot::EndPlot();
                         }
                     }
+                    if(ImGui::CollapsingHeader("PVT Over Time")) {
+                        if(ImPlot::BeginPlot("PVT", ImVec2(-1, 300))) {
+                            ImPlot::SetupAxes("Speed (m/s)", "Time (s)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                            ImPlotStyle& plotStyle = ImPlot::GetStyle();
+                            plotStyle.Colors[ImPlotCol_AxisGrid] = ImVec4(0.5f, 0.5f, 0.5f, 0.3f); 
+                            ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 1.5f); 
+                            ImPlot::PlotLine("Speed", pvtTimes.data(), pvtSpeeds.data(), pvtSpeeds.size());
+                            ImPlot::EndPlot();
+                        }
+                        
+                    }
                     ImGui::EndTabItem();
                 }
 
@@ -565,6 +610,7 @@ int main(int argc, char **argv) {
             
             float currentHDOP = gpsManager.getGPSData().dop.hDOP;
             float currentPDOP = gpsManager.getGPSData().dop.pDOP;
+            const auto& pvt = gpsManager.getGPSData().pvt;
 
             ImGui::Text("HDOP: %.2f", currentHDOP);
             if (ImGui::IsItemHovered())
@@ -573,18 +619,31 @@ int main(int argc, char **argv) {
             ImGui::Text("PDOP: %.2f", currentPDOP);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Position Dilution of Precision (PDOP) indicates the overall accuracy of the GPS.");
+            
+            ImGui::Text("PVT: %.2f, %.2f", pvt.gSpeed, pvt._timestamp);
+            if(ImGui::IsItemHovered())
+                ImGui::SetTooltip("Position Velocity Time (PVT) indicates the speed of the GPS.");
 
             
             hdopValues.push_back(currentHDOP);
             pdopValues.push_back(currentPDOP);
             timeValues.push_back(plotTime);
+
+
+            pvtSpeeds.push_back(pvt.gSpeed);
+            pvtTimes.push_back(plotTime);
+
             plotTime += deltaTime;
+            elapsedTime += deltaTime;
+
 
             
-            while (!timeValues.empty() && (plotTime - timeValues.front()) > windowSize) {
+            while (!timeValues.empty() && (plotTime - timeValues.front())&&(plotTime - pvtTimes.front()) > windowSize) {
                 hdopValues.erase(hdopValues.begin());
                 pdopValues.erase(pdopValues.begin());
                 timeValues.erase(timeValues.begin());
+                pvtSpeeds.erase(pvtSpeeds.begin());
+                pvtTimes.erase(pvtTimes.begin());
             }
 
             {

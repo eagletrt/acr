@@ -28,7 +28,7 @@ public:
 
     
     int initialize(const char* port_or_file);
-
+    bool parseUdpSpec(const char* s, int& port_out);
     
     void start();
     void stop();
