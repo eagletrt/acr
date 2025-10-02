@@ -2,92 +2,84 @@
 #ifndef GPS_HPP
 #define GPS_HPP
 
-#include <atomic>
-#include <thread>
-#include <mutex>
-#include <vector>
-#include "imgui.h"  
-#include "implot.h"
-#include "notifications.hpp" 
 #include "config.hpp"
+#include "imgui.h"
+#include "implot.h"
+#include "notifications.hpp"
+#include "utils.hpp"
+#include <atomic>
+#include <mutex>
+#include <thread>
+#include <vector>
 
 extern "C" {
-    #include "gps_interface.h"
-    #include "acr.h"
-    #include "defines.h"
-    #include "main.h"
-    #include "utils.h"
+#include "acr.h"
+#include "defines.h"
+#include "gps_interface.h"
+#include "main.h"
+#include "utils.h"
 }
 
 class NotificationManager;
 
 class GPSManager {
 public:
-    GPSManager(NotificationManager& notificationManager);
-    ~GPSManager();
+  GPSManager(NotificationManager &notificationManager);
+  ~GPSManager();
 
-    
-    int initialize(const char* port_or_file);
-    bool parseUdpSpec(const char* s, int& port_out);
-    
-    void start();
-    void stop();
+  int initialize(const char *port_or_file);
 
-    
-    void resetSessionData();
+  void start();
+  void stop();
 
-    
-    ImPlotPoint getCurrentPosition() const;
-    std::vector<ImPlotPoint> getTrajectory() const;
-    std::vector<cone_t>& getCones();
+  void resetSessionData();
 
-    
-    void setConePlacementMode(bool mode);
-    bool getConePlacementMode() const;
+  ImPlotPoint getCurrentPosition() const;
+  std::vector<ImPlotPoint> getTrajectory() const;
+  std::vector<cone_t> &getCones();
 
-    
-    gps_serial_port& getGPS();
-    cone_session_t& getConeSession();
-    full_session_t& getSession();
+  void setConePlacementMode(bool mode);
+  bool getConePlacementMode() const;
 
-    
-    std::mutex& getRenderLock();
+  gps_serial_port &getGPS();
+  cone_session_t &getConeSession();
+  full_session_t &getSession();
 
-    
-    gps_parsed_data_t getGPSData() const;
+  std::mutex &getRenderLock();
 
-    
-    std::atomic<bool> saveCone_;
+  gps_parsed_data_t getGPSData() const;
 
-    
-    void deleteCone(int index);
-    void setConeId(cone_id id);
-    void clearCones();
-    void addCone(const cone_t& cone);
-    mutable std::mutex renderLock_;
-    int initializeSessions(const std::string& logDir);
+  std::atomic<bool> saveCone_;
+
+  void deleteCone(int index);
+  void setConeId(cone_id id);
+  void clearCones();
+  void addCone(const cone_t &cone);
+  mutable std::mutex renderLock_;
+  int initializeSessions(const std::string &logDir);
+
+  void setOpenMode(Utils::open_mode mode);
 
 private:
-    std::atomic<bool> kill_thread_;
-    bool conePlacementMode_;
+  std::atomic<bool> kill_thread_;
+  bool conePlacementMode_;
 
-    gps_serial_port gps_;
-    gps_parsed_data_t gps_data_;
-    cone_t cone_;
-    user_data_t user_data_;
-    full_session_t session_;
-    cone_session_t cone_session_;
+  gps_serial_port gps_;
+  gps_parsed_data_t gps_data_;
+  cone_t cone_;
+  user_data_t user_data_;
+  Utils::open_mode open_mode;
+  full_session_t session_;
+  cone_session_t cone_session_;
 
-    ImPlotPoint currentPosition_;
-    std::vector<ImPlotPoint> trajectory_;
-    std::vector<cone_t> cones_;
+  ImPlotPoint currentPosition_;
+  std::vector<ImPlotPoint> trajectory_;
+  std::vector<cone_t> cones_;
 
-    std::thread gpsThread_;
-    NotificationManager& notificationManager_;
-    
+  std::thread gpsThread_;
+  NotificationManager &notificationManager_;
 
-    
-    void readGPSLoop();
+  void readGPSLoop();
 };
 
-#endif 
+#endif

@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.18)
 project(ACR)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD_REQUIRED True)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
 add_compile_definitions("ImDrawIdx=unsigned int")
 
 find_package(PkgConfig REQUIRED)
@@ -12,14 +15,14 @@ pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GTK REQUIRED gtk+-3.0)
 
 # Trova libreria pigpio
-find_library(pigpio_LIBRARY 
+find_library(pigpio_LIBRARY
     NAMES pigpio
     HINTS /usr/local/lib
 )
 if(NOT pigpio_LIBRARY)
-    message(WARNING "pigpio non trovato, disabilitando pigpio")
-    set(pigpio_LIBRARY "")
-    add_compile_definitions(ACR_NO_PIGPIO)
+  message(WARNING "pigpio non trovato, disabilitando pigpio")
+  set(pigpio_LIBRARY "")
+  add_compile_definitions(ACR_NO_PIGPIO)
 endif()
 
 # Includi le directory necessarie
@@ -28,7 +31,7 @@ include_directories(
     ${GTK_INCLUDE_DIRS}
     ${GLFW_INCLUDE_DIRS}
     ${CMAKE_CURRENT_LIST_DIR}/inc
-    ${CMAKE_CURRENT_LIST_DIR}/external   
+    ${CMAKE_CURRENT_LIST_DIR}/external
     ${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended/src/include
 )
 
@@ -46,7 +49,7 @@ add_library(acr STATIC
 )
 target_include_directories(acr PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/inc
-    ${CMAKE_CURRENT_LIST_DIR}/external  
+    ${CMAKE_CURRENT_LIST_DIR}/external
     ${GLIB_INCLUDE_DIRS}
     ${GTK_INCLUDE_DIRS}
 )
@@ -91,7 +94,7 @@ set(VIEWER_SOURCES
     src/font_manager.cpp
     src/icon_manager.cpp
     src/gps.cpp
-    src/map.cpp 
+    src/map.cpp
     src/utils.cpp
     src/cones_loader.cpp
     external/imgui/imgui.cpp
@@ -106,33 +109,12 @@ set(VIEWER_SOURCES
     external/implot/implot_demo.cpp
 )
 
-FILE(GLOB prova ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
-list(REMOVE_ITEM prova ${CMAKE_CURRENT_LIST_DIR}/src/main.cpp)
-add_library(prova_src STATIC ${prova})
-target_include_directories(prova_src PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}              
-    ${CMAKE_CURRENT_LIST_DIR}/inc
-    ${CMAKE_CURRENT_LIST_DIR}/external
-    ${CMAKE_CURRENT_LIST_DIR}/external/imgui
-    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/backends
-    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/misc/cpp
-    ${CMAKE_CURRENT_LIST_DIR}/external/implot
-    ${GLFW_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended/src/include
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
-)
-target_link_libraries(
-    prova_src 
-    gps
-    
-)
 
 add_executable(viewer ${VIEWER_SOURCES})
 
 # Includi directory necessarie per il viewer
 target_include_directories(viewer PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}              
+    ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/inc
     ${CMAKE_CURRENT_LIST_DIR}/external
     ${CMAKE_CURRENT_LIST_DIR}/external/imgui
@@ -160,5 +142,4 @@ target_link_libraries(viewer
     ${GLIB_LIBRARIES}
     ${GTK_LIBRARIES}
     ${GLX_LIBRARY}
-    prova_src
 )

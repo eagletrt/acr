@@ -11,6 +11,7 @@
 
 #include "defines.h"
 #include "gpio.h"
+#include "gps_interface.h"
 #include "led.h"
 #include "utils.h"
 
@@ -57,7 +58,7 @@ int main(void) {
 
   gps_serial_port gps;
   gps_interface_initialize(&gps);
-  int res = gps_interface_open(&gps, "/dev/ttyACM0", B230400);
+  int res = gps_interface_open_serial_port(&gps, "/dev/ttyACM0", B230400);
   if (res == -1) {
     error_state(ERROR_GPS_NOT_FOUND);
   }
