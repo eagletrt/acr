@@ -33,6 +33,10 @@ include_directories(
     ${CMAKE_CURRENT_LIST_DIR}/inc
     ${CMAKE_CURRENT_LIST_DIR}/external
     ${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended/src/include
+    ${CMAKE_CURRENT_LIST_DIR}/external/imgui
+    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/misc/cpp
+    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/backends
+    ${CMAKE_CURRENT_LIST_DIR}/external/implot
 )
 
 add_definitions(${GLIB_CFLAGS_OTHER} ${GTK_CFLAGS_OTHER})
@@ -82,35 +86,67 @@ target_include_directories(main PRIVATE
 target_compile_options(main PRIVATE -O -g -Wall -Wextra)
 target_link_libraries(main acr gps m pthread ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
 
+FILE(GLOB imgui_srcs ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/*)
+FILE(GLOB implot_srcs ${CMAKE_CURRENT_SOURCE_DIR}/external/implot/*)
+
+add_library(
+    imgui
+    STATIC
+
+    # GUI
+    ${imgui_srcs}
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends/imgui_impl_glfw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends/imgui_impl_opengl2.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/misc/cpp/imgui_stdlib.cpp
+)
+target_compile_options(imgui PRIVATE -w)
+
+add_library(
+    implot
+    STATIC
+
+    # PLOT
+    ${implot_srcs}
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/implot/implot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/implot/implot_items.cpp
+)
+target_compile_options(implot PRIVATE -w)
+
 find_package(OpenGL REQUIRED)
 find_library(GLX_LIBRARY GLX)
-set(VIEWER_SOURCES
-    src/viewer.cpp
-    src/gui.cpp
-    src/gps.cpp
-    src/file_browser.cpp
-    src/notifications.cpp
-    src/map.cpp
-    src/font_manager.cpp
-    src/icon_manager.cpp
+
+add_library(gps_utils STATIC
     src/gps.cpp
     src/map.cpp
-    src/utils.cpp
     src/cones_loader.cpp
-    external/imgui/imgui.cpp
-    external/imgui/imgui_draw.cpp
-    external/imgui/imgui_widgets.cpp
-    external/imgui/imgui_tables.cpp
-    external/imgui/backends/imgui_impl_glfw.cpp
-    external/imgui/backends/imgui_impl_opengl2.cpp
-    external/implot/implot.cpp
-    external/implot/implot_items.cpp
-    external/imgui/imgui_demo.cpp
-    external/implot/implot_demo.cpp
 )
 
+target_include_directories(gps_utils PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}/inc
+)
 
-add_executable(viewer ${VIEWER_SOURCES})
+target_link_libraries(gps_utils acr gps imgui implot)
+
+target_compile_options(gps_utils PRIVATE -O -g -Wall -Wextra)
+
+add_library(utils STATIC
+src/profiler.cpp
+src/utils.cpp
+src/font_manager.cpp
+src/icon_manager.cpp
+src/file_browser.cpp
+src/notifications.cpp
+)
+
+target_include_directories(utils PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}/inc
+)
+target_compile_options(utils PRIVATE -O -g -Wall -Wextra)
+
+target_link_libraries(utils gps_utils imgui implot)
+
+
+add_executable(viewer src/viewer.cpp src/gui.cpp)
 
 # Includi directory necessarie per il viewer
 target_include_directories(viewer PRIVATE
@@ -142,4 +178,8 @@ target_link_libraries(viewer
     ${GLIB_LIBRARIES}
     ${GTK_LIBRARIES}
     ${GLX_LIBRARY}
+    imgui
+    implot
+    gps_utils
+    utils
 )

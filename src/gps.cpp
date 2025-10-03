@@ -1,11 +1,7 @@
 #include "gps.hpp"
-#include "acr.h"
 #include "config.hpp"
 #include "defines.h"
-#include "gps_interface.h"
-#include "main.h"
 #include "notifications.hpp"
-#include "utils.h"
 #include "utils.hpp"
 #include <GLFW/glfw3.h>
 #include <cmath>
@@ -14,6 +10,13 @@
 #include <string>
 #include <sys/stat.h>
 #include <termios.h>
+
+extern "C" {
+#include "acr.h"
+#include "gps_interface.h"
+#include "main.h"
+#include "utils.h"
+}
 
 GPSManager::GPSManager(NotificationManager &notificationManager)
     : kill_thread_(false), saveCone_(false), conePlacementMode_(false),
@@ -30,7 +33,7 @@ GPSManager::GPSManager(NotificationManager &notificationManager)
 GPSManager::~GPSManager() { stop(); }
 
 gps_parsed_data_t GPSManager::getGPSData() const {
-  std::lock_guard<std::mutex> lock(renderLock_);
+  // std::lock_guard<std::mutex> lock(renderLock_);
   return gps_data_;
 }
 

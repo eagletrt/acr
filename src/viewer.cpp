@@ -9,6 +9,7 @@
 #include "implot.h"
 #include "map.hpp"
 #include "nfd.h"
+#include "profiler.hpp"
 #include "stb_image.h"
 #include <algorithm>
 #include <atomic>
@@ -269,6 +270,8 @@ int main(int argc, char **argv) {
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground;
 
+    Profiler::draw();
+
     if (ImGui::Begin("ACR", nullptr, window_flags)) {
 
       ImGui::BeginGroup();
@@ -339,7 +342,10 @@ int main(int argc, char **argv) {
           }).detach();
         }
       }
-
+      ImGui::SameLine();
+      if (ImGui::Button("Profiler")) {
+        Profiler::show = !Profiler::show;
+      }
       ImGui::EndGroup();
 
       ImGui::Spacing();
@@ -630,10 +636,9 @@ int main(int argc, char **argv) {
 
       {
 
-        std::lock_guard<std::mutex> lock(gpsManager.getRenderLock());
-
         if (ImGui::IsKeyPressed(ImGuiKey_T)) {
           if (gpsManager.getSession().active) {
+            std::lock_guard<std::mutex> lock(gpsManager.getRenderLock());
             csv_session_stop(&gpsManager.getSession());
             printf("Session '%s' ended.\n",
                    gpsManager.getSession().session_name);
@@ -641,6 +646,7 @@ int main(int argc, char **argv) {
                                           "Recording session ended.",
                                           NotificationType::Info);
           } else {
+            std::lock_guard<std::mutex> lock(gpsManager.getRenderLock());
             if (csv_session_setup(&gpsManager.getSession(),
                                   logs_v2_basepath.c_str()) == -1) {
               printf("Error: Session setup failed.\n");
@@ -664,6 +670,7 @@ int main(int argc, char **argv) {
         }
 
         if (ImGui::IsKeyPressed(ImGuiKey_O)) {
+          std::lock_guard<std::mutex> lock(gpsManager.getRenderLock());
           gpsManager.setConeId(CONE_ID_ORANGE);
           gpsManager.saveCone_.store(true);
           notificationManager.showPopup("Cone_Orange", "Cone Placed",
@@ -672,6 +679,7 @@ int main(int argc, char **argv) {
         }
 
         else if (ImGui::IsKeyPressed(ImGuiKey_Y)) {
+          std::lock_guard<std::mutex> lock(gpsManager.getRenderLock());
           gpsManager.setConeId(CONE_ID_YELLOW);
           gpsManager.saveCone_.store(true);
           notificationManager.showPopup("Cone_Yellow", "Cone Placed",
@@ -680,6 +688,7 @@ int main(int argc, char **argv) {
         }
 
         else if (ImGui::IsKeyPressed(ImGuiKey_B)) {
+          std::lock_guard<std::mutex> lock(gpsManager.getRenderLock());
           gpsManager.setConeId(CONE_ID_BLUE);
           gpsManager.saveCone_.store(true);
           notificationManager.showPopup("Cone_Blue", "Cone Placed",
@@ -702,6 +711,7 @@ int main(int argc, char **argv) {
 
         if (gpsManager.saveCone_.load() &&
             gpsManager.getConeSession().active == 0) {
+          std::lock_guard<std::mutex> lock(gpsManager.getRenderLock());
           if (cone_session_setup(&gpsManager.getConeSession(),
                                  logs_v2_basepath.c_str()) == -1) {
             printf("Error: Cone session setup failed.\n");
@@ -807,7 +817,6 @@ int main(int argc, char **argv) {
         ImPlot::SetupLegend(ImPlotLocation_NorthEast);
 
         {
-          std::lock_guard<std::mutex> lock(mapManager.mapMutex_);
           if (selectedMap.texture != 0) {
             ImPlot::PlotImage(
                 selectedMap.name.c_str(), selectedMap.texture,
