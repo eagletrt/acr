@@ -6,6 +6,11 @@ set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+
+set(DIR ${CMAKE_CURRENT_LIST_DIR})
+set(CDIR ${CMAKE_CURRENT_LIST_DIR})
+
 add_compile_definitions("ImDrawIdx=unsigned int")
 
 find_package(PkgConfig REQUIRED)
@@ -25,161 +30,16 @@ if(NOT pigpio_LIBRARY)
   add_compile_definitions(ACR_NO_PIGPIO)
 endif()
 
-# Includi le directory necessarie
 include_directories(
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
-    ${GLFW_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_LIST_DIR}/inc
-    ${CMAKE_CURRENT_LIST_DIR}/external
-    ${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended/src/include
-    ${CMAKE_CURRENT_LIST_DIR}/external/imgui
-    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/misc/cpp
-    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/backends
-    ${CMAKE_CURRENT_LIST_DIR}/external/implot
+  ${GLIB_INCLUDE_DIRS}
+  ${GTK_INCLUDE_DIRS}
+  ${GLFW_INCLUDE_DIRS}
 )
-
-add_definitions(${GLIB_CFLAGS_OTHER} ${GTK_CFLAGS_OTHER})
-
-# Aggiungi il sottodirectory di nativefiledialog-extended
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended)
-
-# Libreria acr
-add_library(acr STATIC
-    ${CMAKE_CURRENT_LIST_DIR}/src/acr.c
-    ${CMAKE_CURRENT_LIST_DIR}/src/led.c
-    ${CMAKE_CURRENT_LIST_DIR}/src/gpio.c
-    ${CMAKE_CURRENT_LIST_DIR}/src/utils.c
-)
-target_include_directories(acr PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/inc
-    ${CMAKE_CURRENT_LIST_DIR}/external
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
-)
-target_compile_options(acr PRIVATE -O -g -Wall -Wextra)
-target_link_libraries(acr PUBLIC ${pigpio_LIBRARY} ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
-
-# Libreria gps
-add_library(gps STATIC
-    ${CMAKE_CURRENT_LIST_DIR}/external/gpslib/gps.c
-    ${CMAKE_CURRENT_LIST_DIR}/external/gpslib/gps_interface.c
-)
-target_include_directories(gps PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/external/gpslib
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
-)
-target_compile_options(gps PRIVATE -O -g -Wall -Wextra)
-target_link_libraries(gps PUBLIC ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
-
-# Directory per eseguibili
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin)
-
-# Eseguibile main
-add_executable(main src/main.c)
-target_include_directories(main PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/inc
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
-)
-target_compile_options(main PRIVATE -O -g -Wall -Wextra)
-target_link_libraries(main acr gps m pthread ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
-
-FILE(GLOB imgui_srcs ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/*)
-FILE(GLOB implot_srcs ${CMAKE_CURRENT_SOURCE_DIR}/external/implot/*)
-
-add_library(
-    imgui
-    STATIC
-
-    # GUI
-    ${imgui_srcs}
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends/imgui_impl_glfw.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends/imgui_impl_opengl2.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/misc/cpp/imgui_stdlib.cpp
-)
-target_compile_options(imgui PRIVATE -w)
-
-add_library(
-    implot
-    STATIC
-
-    # PLOT
-    ${implot_srcs}
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/implot/implot.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/implot/implot_items.cpp
-)
-target_compile_options(implot PRIVATE -w)
 
 find_package(OpenGL REQUIRED)
 find_library(GLX_LIBRARY GLX)
 
-add_library(gps_utils STATIC
-    src/gps.cpp
-    src/map.cpp
-    src/cones_loader.cpp
-)
+add_definitions(${GLIB_CFLAGS_OTHER} ${GTK_CFLAGS_OTHER})
 
-target_include_directories(gps_utils PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/inc
-)
-
-target_link_libraries(gps_utils acr gps imgui implot)
-
-target_compile_options(gps_utils PRIVATE -O -g -Wall -Wextra)
-
-add_library(utils STATIC
-src/profiler.cpp
-src/utils.cpp
-src/font_manager.cpp
-src/icon_manager.cpp
-src/file_browser.cpp
-src/notifications.cpp
-)
-
-target_include_directories(utils PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/inc
-)
-target_compile_options(utils PRIVATE -O -g -Wall -Wextra)
-
-target_link_libraries(utils gps_utils imgui implot)
-
-
-add_executable(viewer src/viewer.cpp src/gui.cpp)
-
-# Includi directory necessarie per il viewer
-target_include_directories(viewer PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}
-    ${CMAKE_CURRENT_LIST_DIR}/inc
-    ${CMAKE_CURRENT_LIST_DIR}/external
-    ${CMAKE_CURRENT_LIST_DIR}/external/imgui
-    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/backends
-    ${CMAKE_CURRENT_LIST_DIR}/external/imgui/misc/cpp
-    ${CMAKE_CURRENT_LIST_DIR}/external/implot
-    ${GLFW_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended/src/include
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
-)
-
-# Imposta opzioni di compilazione per viewer
-target_compile_options(viewer PRIVATE -O -g -Wall -Wextra)
-
-# Linka librerie necessarie per viewer
-target_link_libraries(viewer
-    acr
-    gps
-    m
-    pthread
-    OpenGL::GL
-    ${GLFW_LIBRARIES}  # Assicurati di usare GLFW_LIBRARIES da pkg_check_modules
-    nfd
-    ${GLIB_LIBRARIES}
-    ${GTK_LIBRARIES}
-    ${GLX_LIBRARY}
-    imgui
-    implot
-    gps_utils
-    utils
-)
+add_subdirectory(${CDIR}/external)
+add_subdirectory(${CDIR}/core)
