@@ -355,24 +355,41 @@ int main(int argc, char **argv) {
                                    ImGuiWindowFlags_AlwaysAutoResize)) {
           const char *modes[] = {"Serial Port", "Log File", "UDP"};
           static int selected_mode_idx = 0;
+          static int prev_idx = -1;
 
           ImGui::Combo("##Mode Selector", &selected_mode_idx, modes,
                        (int)Utils::open_mode_unknown);
+          if (selected_mode_idx != prev_idx) {
+            switch (static_cast<Utils::open_mode>(selected_mode_idx)) {
+            case Utils::open_mode_serial_port:
+              strcpy(port_or_file, DEFAULT_GPS_PORT);
+              break;
+            case Utils::open_mode_log_file:
+              strcpy(port_or_file, "");
+              break;
+            case Utils::open_mode_udp:
+              strcpy(port_or_file, DEFAULT_UDP_PORT);
+            case Utils::open_mode_unknown:
+              break;
+            }
+            prev_idx = selected_mode_idx;
+          }
 
           switch (static_cast<Utils::open_mode>(selected_mode_idx)) {
-
           case Utils::open_mode_serial_port:
-            strcpy(port_or_file, DEFAULT_GPS_PORT);
             gpsManager.setOpenMode(Utils::open_mode_serial_port);
             ImGui::InputText("Serial Port", port_or_file, sizeof(port_or_file));
             break;
           case Utils::open_mode_log_file:
             gpsManager.setOpenMode(Utils::open_mode_log_file);
+            ImGui::InputText("Absolute Path", port_or_file,
+                             sizeof(port_or_file));
             break;
           case Utils::open_mode_udp:
-            strcpy(port_or_file, DEFAULT_UDP_PORT);
             gpsManager.setOpenMode(Utils::open_mode_udp);
             ImGui::InputText("UDP Port", port_or_file, sizeof(port_or_file));
+            break;
+          case Utils::open_mode_unknown:
             break;
           }
 
