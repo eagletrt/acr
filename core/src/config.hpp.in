@@ -1,11 +1,17 @@
 #ifndef CONFIG_HPP
 #define CONFIG_HPP
 
+// From cmake
+#define PROJECT_PATH "@CMAKE_SOURCE_DIR@"
+
 // Directory Paths
-#define ASSETS_DIR "../assets/"
-#define ICONS_DIR ASSETS_DIR "icons/"
-#define FONTS_DIR ASSETS_DIR "fonts/"
+#define ASSETS_DIR PROJECT_PATH "/assets/"
+#define ICONS_DIR ASSETS_DIR "/icons/"
+#define FONTS_DIR ASSETS_DIR "/fonts/"
 #define MAPS_DIR ASSETS_DIR
+
+// Config
+#define ACR_CONFIG_FILE PROJECT_PATH "/build/config.ini"
 
 // GPS Configuration
 #ifndef DEFAULT_GPS_PORT

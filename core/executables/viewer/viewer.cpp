@@ -53,7 +53,7 @@ struct BoolWrapper {
 extern void setEnhancedTheme();
 
 bool LoadConfig(AppTheme &theme, int &lastFontIndex, std::string &currentPath) {
-  std::ifstream configFile("config.ini");
+  std::ifstream configFile(ACR_CONFIG_FILE);
   if (!configFile.is_open()) {
     theme = AppTheme::Dark;
     lastFontIndex = 0;
@@ -107,7 +107,7 @@ bool LoadConfig(AppTheme &theme, int &lastFontIndex, std::string &currentPath) {
 
 bool SaveConfig(const AppTheme &theme, int lastFontIndex,
                 const std::string &currentPath) {
-  std::ofstream configFile("config.ini", std::ios::out | std::ios::trunc);
+  std::ofstream configFile(ACR_CONFIG_FILE, std::ios::out | std::ios::trunc);
   if (!configFile.is_open()) {
     printf("Failed to open config file for writing.\n");
     return false;

@@ -56,3 +56,6 @@ bin/
 build/
 .vscode
 imgui.ini
+
+# Generated
+core/src/config.hpp
