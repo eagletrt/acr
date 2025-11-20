@@ -5,13 +5,17 @@
 #include "utils.hpp"
 #include <GLFW/glfw3.h>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <regex>
 #include <string>
 #include <sys/stat.h>
 #include <termios.h>
+#include <thread>
+#include <utility>
 
 extern "C" {
+#include "/usr/include/gps.h"
 #include "acr.h"
 #include "gps_interface.h"
 #include "main.h"
@@ -37,6 +41,24 @@ gps_parsed_data_t GPSManager::getGPSData() const {
   return gps_data_;
 }
 
+float GPSManager::getHDOP() {
+  return (open_mode == Utils::open_mode_gpsd) ? gpsd_data_.dop.hdop
+                                              : gps_data_.dop.hDOP;
+}
+
+float GPSManager::getPDOP() {
+  return (open_mode == Utils::open_mode_gpsd) ? gpsd_data_.dop.pdop
+                                              : gps_data_.dop.pDOP;
+}
+
+std::pair<float, uint64_t> GPSManager::getPVT() {
+  std::pair<float, uint64_t> ret;
+  ret.first = (open_mode == Utils::open_mode_gpsd) ? gpsd_data_.fix.speed
+                                                   : gps_data_.pvt.gSpeed;
+  ret.first = (open_mode == Utils::open_mode_gpsd) ? gpsd_data_.fix.time.tv_sec
+                                                   : gps_data_.pvt._timestamp;
+}
+
 int GPSManager::initialize(const char *port_or_file) {
   int res = 0;
   gps_interface_initialize(&gps_);
@@ -50,6 +72,9 @@ int GPSManager::initialize(const char *port_or_file) {
     break;
   case Utils::open_mode_udp:
     res = gps_interface_open_udp(&gps_, port_or_file);
+    break;
+  case Utils::open_mode_gpsd:
+    res = gps_open(port_or_file, "2947", &gpsd_data_);
     break;
   }
   if (res == -1) {
@@ -75,13 +100,20 @@ void GPSManager::start() {
   if (gpsThread_.joinable())
     return;
   kill_thread_.store(false);
-  gpsThread_ = std::thread(&GPSManager::readGPSLoop, this);
+  if (open_mode == Utils::open_mode_gpsd)
+    gpsThread_ = std::thread(&GPSManager::readGPSDLoop, this);
+  else
+    gpsThread_ = std::thread(&GPSManager::readGPSLoop, this);
 }
 
 void GPSManager::stop() {
   kill_thread_.store(true);
   if (gpsThread_.joinable()) {
     gpsThread_.join();
+  }
+  if (open_mode == Utils::open_mode_gpsd) {
+    gps_stream(&gpsd_data_, WATCH_DISABLE, NULL);
+    gps_close(&gpsd_data_);
   }
   gps_interface_close(&gps_);
 }
@@ -182,6 +214,48 @@ void GPSManager::readGPSLoop() {
       cone_session_write(&cone_session_, &cone_);
       cone_session_.file = tmp;
       cones_.push_back(cone_);
+    }
+  }
+}
+
+void GPSManager::readGPSDLoop() {
+  gps_stream(&gpsd_data_, WATCH_ENABLE | WATCH_JSON, NULL);
+  while (gps_waiting(&gpsd_data_, 5000000)) {
+    if (-1 == gps_read(&gpsd_data_, NULL, 0)) {
+      continue;
+    }
+
+    if (MODE_SET == (MODE_SET & gpsd_data_.set)) {
+      std::lock_guard<std::mutex> lock(renderLock_);
+      static double height = 0.0;
+
+      if (CONE_ENABLE_MEAN && currentPosition_.x != 0.0 &&
+          currentPosition_.y != 0.0) {
+        currentPosition_.x =
+            currentPosition_.x * CONE_MEAN_COMPLEMENTARY +
+            gpsd_data_.fix.longitude * (1.0 - CONE_MEAN_COMPLEMENTARY);
+        currentPosition_.y =
+            currentPosition_.y * CONE_MEAN_COMPLEMENTARY +
+            gpsd_data_.fix.latitude * (1.0 - CONE_MEAN_COMPLEMENTARY);
+        height = height * CONE_MEAN_COMPLEMENTARY +
+                 gpsd_data_.fix.altHAE * (1.0 - CONE_MEAN_COMPLEMENTARY);
+      } else {
+        currentPosition_.x = gpsd_data_.fix.longitude;
+        currentPosition_.y = gpsd_data_.fix.latitude;
+        height = gpsd_data_.fix.altHAE;
+      }
+
+      cone_.timestamp = gpsd_data_.fix.time.tv_sec;
+      cone_.lon = currentPosition_.x;
+      cone_.lat = currentPosition_.y;
+      cone_.alt = height;
+
+      static int count = 0;
+      if (session_.active && count % 10 == 0) {
+        trajectory_.emplace_back(currentPosition_);
+        count = 0;
+      }
+      count++;
     }
   }
 }

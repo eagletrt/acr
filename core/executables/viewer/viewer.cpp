@@ -353,7 +353,8 @@ int main(int argc, char **argv) {
       if (showGPSDialog) {
         if (ImGui::BeginPopupModal("Open GPS", NULL,
                                    ImGuiWindowFlags_AlwaysAutoResize)) {
-          const char *modes[] = {"Serial Port", "Log File", "UDP"};
+          const char *modes[] = {"Serial Port", "Log File", "UDP",
+                                 "GPSD Client"};
           static int selected_mode_idx = 0;
           static int prev_idx = -1;
 
@@ -369,6 +370,10 @@ int main(int argc, char **argv) {
               break;
             case Utils::open_mode_udp:
               strcpy(port_or_file, DEFAULT_UDP_PORT);
+              break;
+            case Utils::open_mode_gpsd:
+              strcpy(port_or_file, "localhost");
+              break;
             case Utils::open_mode_unknown:
               break;
             }
@@ -388,6 +393,11 @@ int main(int argc, char **argv) {
           case Utils::open_mode_udp:
             gpsManager.setOpenMode(Utils::open_mode_udp);
             ImGui::InputText("UDP Port", port_or_file, sizeof(port_or_file));
+            break;
+          case Utils::open_mode_gpsd:
+            gpsManager.setOpenMode(Utils::open_mode_gpsd);
+            ImGui::InputText("GSPD Server IP", port_or_file,
+                             sizeof(port_or_file));
             break;
           case Utils::open_mode_unknown:
             break;
@@ -612,9 +622,9 @@ int main(int argc, char **argv) {
 
       ImGui::Separator();
 
-      float currentHDOP = gpsManager.getGPSData().dop.hDOP;
-      float currentPDOP = gpsManager.getGPSData().dop.pDOP;
-      const auto &pvt = gpsManager.getGPSData().pvt;
+      float currentHDOP = gpsManager.getHDOP();
+      float currentPDOP = gpsManager.getPDOP();
+      const auto pvt = gpsManager.getPVT();
 
       ImGui::Text("HDOP: %.2f", currentHDOP);
       if (ImGui::IsItemHovered())
@@ -626,7 +636,7 @@ int main(int argc, char **argv) {
         ImGui::SetTooltip("Position Dilution of Precision (PDOP) indicates the "
                           "overall accuracy of the GPS.");
 
-      ImGui::Text("PVT: %.2f, %.2f", pvt.gSpeed, pvt._timestamp);
+      ImGui::Text("PVT: %.2f, %.2f", pvt.first, pvt.second);
 
       if (ImGui::IsItemHovered())
         ImGui::SetTooltip(
@@ -636,7 +646,7 @@ int main(int argc, char **argv) {
       pdopValues.push_back(currentPDOP);
       timeValues.push_back(plotTime);
 
-      pvtSpeeds.push_back(pvt.gSpeed);
+      pvtSpeeds.push_back(pvt.first);
       pvtTimes.push_back(plotTime);
 
       plotTime += deltaTime;

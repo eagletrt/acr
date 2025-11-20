@@ -18,6 +18,8 @@ pkg_check_modules(GLFW REQUIRED glfw3)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GTK REQUIRED gtk+-3.0)
 
+pkg_check_modules(GPSD REQUIRED libgps)
+
 # Trova libreria pigpio
 find_library(pigpio_LIBRARY
     NAMES pigpio

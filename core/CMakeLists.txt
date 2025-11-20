@@ -106,4 +106,5 @@ target_link_libraries(viewer
     implot
     gps-utils
     utils
+    ${GPSD_LIBRARIES}
 )
