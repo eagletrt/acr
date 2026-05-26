@@ -6,13 +6,30 @@ set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -std=c++2a -DGLEW_STATIC -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-padded -Wno-error=reorder -Wno-error=unused-function -Wno-error=unused-variable")
+
+include_directories(SYSTEM ${GLEW_INCLUDE_DIRS})
+
 add_compile_definitions("ImDrawIdx=unsigned int")
+add_compile_definitions(GL_SILENCE_DEPRECATION)
 
 find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLFW_PKG QUIET glfw3)
+if(GLFW_PKG_FOUND)
+    set(GLFW_INCLUDE_DIRS ${GLFW_PKG_INCLUDE_DIRS})
+    set(GLFW_LIBRARIES ${GLFW_PKG_LIBRARIES})
+endif()
+find_package(GLEW REQUIRED)
+find_package(OpenGL REQUIRED)
+find_package(glfw3 3.3 REQUIRED)
 
-pkg_check_modules(GLFW REQUIRED glfw3)
-pkg_check_modules(GLIB REQUIRED glib-2.0)
-pkg_check_modules(GTK REQUIRED gtk+-3.0)
+if(NOT GLEW_LIBRARIES)
+    if(GLEW_LIBRARY_DEBUG AND GLEW_LIBRARY_RELEASE)
+        set(GLEW_LIBRARIES "optimized;${GLEW_LIBRARY_RELEASE};debug;${GLEW_LIBRARY_DEBUG}")
+    else()
+        set(GLEW_LIBRARIES GLEW::GLEW)
+    endif()
+endif()
 
 # Trova libreria pigpio
 find_library(pigpio_LIBRARY
@@ -25,10 +42,7 @@ if(NOT pigpio_LIBRARY)
   add_compile_definitions(ACR_NO_PIGPIO)
 endif()
 
-# Includi le directory necessarie
 include_directories(
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
     ${GLFW_INCLUDE_DIRS}
     ${CMAKE_CURRENT_LIST_DIR}/inc
     ${CMAKE_CURRENT_LIST_DIR}/external
@@ -54,11 +68,8 @@ add_library(acr STATIC
 target_include_directories(acr PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/inc
     ${CMAKE_CURRENT_LIST_DIR}/external
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
 )
 target_compile_options(acr PRIVATE -O -g -Wall -Wextra)
-target_link_libraries(acr PUBLIC ${pigpio_LIBRARY} ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
 
 # Libreria gps
 add_library(gps STATIC
@@ -67,11 +78,8 @@ add_library(gps STATIC
 )
 target_include_directories(gps PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/external/gpslib
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
 )
 target_compile_options(gps PRIVATE -O -g -Wall -Wextra)
-target_link_libraries(gps PUBLIC ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
 
 # Directory per eseguibili
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin)
@@ -80,11 +88,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin)
 add_executable(main src/main.c)
 target_include_directories(main PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/inc
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
 )
 target_compile_options(main PRIVATE -O -g -Wall -Wextra)
-target_link_libraries(main acr gps m pthread ${GLIB_LIBRARIES} ${GTK_LIBRARIES})
+target_link_libraries(main acr gps pthread)
 
 FILE(GLOB imgui_srcs ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/*)
 FILE(GLOB implot_srcs ${CMAKE_CURRENT_SOURCE_DIR}/external/implot/*)
@@ -111,9 +117,6 @@ add_library(
     ${CMAKE_CURRENT_SOURCE_DIR}/external/implot/implot_items.cpp
 )
 target_compile_options(implot PRIVATE -w)
-
-find_package(OpenGL REQUIRED)
-find_library(GLX_LIBRARY GLX)
 
 add_library(gps_utils STATIC
     src/gps.cpp
@@ -157,10 +160,7 @@ target_include_directories(viewer PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/external/imgui/backends
     ${CMAKE_CURRENT_LIST_DIR}/external/imgui/misc/cpp
     ${CMAKE_CURRENT_LIST_DIR}/external/implot
-    ${GLFW_INCLUDE_DIRS}
     ${CMAKE_CURRENT_LIST_DIR}/external/nativefiledialog-extended/src/include
-    ${GLIB_INCLUDE_DIRS}
-    ${GTK_INCLUDE_DIRS}
 )
 
 # Imposta opzioni di compilazione per viewer
@@ -173,13 +173,14 @@ target_link_libraries(viewer
     m
     pthread
     OpenGL::GL
-    ${GLFW_LIBRARIES}  # Assicurati di usare GLFW_LIBRARIES da pkg_check_modules
     nfd
-    ${GLIB_LIBRARIES}
-    ${GTK_LIBRARIES}
-    ${GLX_LIBRARY}
     imgui
     implot
     gps_utils
     utils
+    glfw
+    OpenGL::GL
+    ${GLEW_LIBRARIES}
+    GLEW::GLEW
 )
+

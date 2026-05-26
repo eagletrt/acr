@@ -12,17 +12,19 @@
 #include <thread>
 #include <vector>
 
-extern "C" {
+extern "C"
+{
 #include "acr.h"
 #include "defines.h"
-#include "gps_interface.h"
+#include "gpslib/gps_interface.h"
 #include "main.h"
 #include "utils.h"
 }
 
 class NotificationManager;
 
-class GPSManager {
+class GPSManager
+{
 public:
   GPSManager(NotificationManager &notificationManager);
   ~GPSManager();

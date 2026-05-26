@@ -1,7 +1,11 @@
 #include "map.hpp"
-#include "icon_manager.hpp" 
+#include "icon_manager.hpp"
 #include "stb_image.h"
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#else
 #include <GL/gl.h>
+#endif
 #include <iostream>
 #include <thread>
 #include <algorithm>
